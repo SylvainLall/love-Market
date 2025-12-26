@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Mes services - Love Market</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="logo">💕 Love Market</div>
+      <% if (user) { %>
+      <nav class="nav">
+        <a href="/dashboard" title="Dashboard" class="<%= currentPath === '/dashboard' ? 'nav-active' : '' %>">🏠<span class="nav-text"> Accueil</span></a>
+        <a href="/shop" title="Boutique" class="<%= currentPath === '/shop' ? 'nav-active' : '' %>">🛍️<span class="nav-text"> Boutique</span></a>
+        <a href="/my-services" title="Mes services" class="<%= currentPath === '/my-services' ? 'nav-active' : '' %>">🤝<span class="nav-text"> Mes services</span></a>
+        <a href="/negotiations" title="Négociations" class="nav-link-with-badge <%= currentPath === '/negotiations' ? 'nav-active' : '' %>">
+          💬<span class="nav-text"> Négociations</span>
+          <% if (notificationCount > 0) { %>
+          <span class="notification-badge"><%= notificationCount %></span>
+          <% } %>
+        </a>
+        <% if (user.role === 'admin') { %>
+        <a href="/admin" class="admin-link <%= currentPath === '/admin' ? 'nav-active' : '' %>" title="Admin">⚙️<span class="nav-text"> Admin</span></a>
+        <% } %>
+      </nav>
+      <div class="user-info">
+        <span class="credits"><%= user.credits %> ❤️</span>
+        <span class="user-name"><%= user.displayName %></span>
+        <a href="/logout" class="logout">Déconnexion</a>
+      </div>
+      <% } %>
+    </header>
+
+    <main class="page">
+      <section class="section">
+        <h1 class="section-title">Mes services 🌸</h1>
+
+        <div class="card">
+          <h2 class="card-title">Créer un nouveau service</h2>
+          <form method="post" action="/services" class="form">
+            <label>
+              Titre
+              <input type="text" name="title" placeholder="Petit déjeuner au lit" required />
+            </label>
+            <label>
+              Description
+              <textarea name="description" rows="2" placeholder="Décris ton service"></textarea>
+            </label>
+            <label>
+              Catégorie
+              <select name="category">
+                <option value="Romantique">Romantique</option>
+                <option value="Détente">Détente</option>
+                <option value="Fun">Fun</option>
+                <option value="Maison">Maison</option>
+                <option value="Sortie">Sortie</option>
+                <option value="Famille">Famille</option>
+                <option value="Enfants">Enfants</option>
+                <option value="Cuisine">Cuisine</option>
+                <option value="Voyage">Voyage</option>
+                <option value="Bien-être">Bien-être</option>
+              </select>
+            </label>
+            <label>
+              Icône
+              <select name="icon">
+                <option value="🛁">🛁 Salle de bain / ménage</option>
+                <option value="🥐">🥐 Petit déjeuner / cuisine</option>
+                <option value="🍽️">🍽️ Restaurant / sortie</option>
+                <option value="💆">💆 Massage / détente</option>
+                <option value="🎲">🎲 Soirée fun / jeux</option>
+                <option value="📺">📺 Séries / film</option>
+                <option value="👶">👶 Garde enfants</option>
+                <option value="🌹">🌹 Geste romantique</option>
+                <option value="🎉">🎉 Fête / anniversaire</option>
+                <option value="🚗">🚗 Sortie / balade</option>
+                <option value="💗">💗 Autre</option>
+              </select>
+            </label>
+            <label>
+              Prix (en crédits ❤️)
+              <input type="number" name="price" min="0" step="1" value="20" />
+            </label>
+            <button type="submit" class="btn-primary">Créer le service</button>
+          </form>
+        </div>
+
+        <div class="cards">
+          <% if (!services.length) { %>
+          <p>Tu ne proposes encore rien. Crée ton premier service !</p>
+          <% } %>
+          <% services.forEach(function(service) { %>
+          <div class="card">
+            <h2 class="card-title">
+              <span class="service-icon"><%= service.icon || '💗' %></span>
+              <%= service.title %>
+            </h2>
+            <p class="category"><%= service.category %></p>
+            <% if (service.description) { %>
+            <p><%= service.description %></p>
+            <% } %>
+            <p class="price"><%= service.price %> ❤️</p>
+            <form method="get" action="/services/<%= service.id %>/edit" class="inline-form">
+              <button type="submit" class="btn-secondary">Modifier</button>
+            </form>
+            <form method="post" action="/services/<%= service.id %>/delete" class="inline-form">
+              <button type="submit" class="btn-secondary">Supprimer</button>
+            </form>
+          </div>
+          <% }) %>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Love Market - Demo Mobile</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding-bottom: 70px;
+    }
+
+    .topbar {
+      background: white;
+      padding: 15px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #667eea;
+      text-align: center;
+    }
+
+    .user-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 10px;
+      font-size: 0.9rem;
+    }
+
+    .credits {
+      background: #ff6b9d;
+      color: white;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-weight: bold;
+    }
+
+    .page {
+      padding: 15px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 15px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    .card-title {
+      font-size: 1.3rem;
+      margin-bottom: 15px;
+      color: #333;
+    }
+
+    .relationship-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      text-align: center;
+    }
+
+    .relationship-card .card-title {
+      color: white;
+      font-size: 1.5rem;
+    }
+
+    .level-info {
+      background: rgba(255,255,255,0.2);
+      padding: 15px;
+      border-radius: 8px;
+      margin-top: 15px;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 1rem;
+      width: 100%;
+      margin-top: 10px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .btn-secondary {
+      background: #e0e0e0;
+      color: #333;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 1rem;
+      width: 100%;
+      margin-top: 10px;
+      cursor: pointer;
+    }
+
+    .service-card {
+      border-left: 4px solid #667eea;
+      padding: 15px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+
+    .service-title {
+      font-size: 1.2rem;
+      margin-bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .price {
+      color: #ff6b9d;
+      font-size: 1.3rem;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      display: flex;
+      justify-content: space-around;
+      padding: 10px 0;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    }
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      color: #666;
+      text-decoration: none;
+      font-size: 0.75rem;
+      padding: 5px 15px;
+    }
+
+    .nav-item.active {
+      color: #667eea;
+    }
+
+    .nav-icon {
+      font-size: 1.5rem;
+    }
+
+    .badge {
+      background: #ff6b9d;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: bold;
+    }
+
+    .alert {
+      background: #e8f5e9;
+      border-left: 4px solid #4caf50;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+
+    .alert-info {
+      background: #e3f2fd;
+      border-left: 4px solid #2196f3;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+
+    .feedback-options {
+      display: flex;
+      justify-content: space-around;
+      margin: 20px 0;
+    }
+
+    .feedback-option {
+      text-align: center;
+      cursor: pointer;
+      padding: 10px;
+      border: 3px solid transparent;
+      border-radius: 10px;
+      transition: all 0.3s;
+    }
+
+    .feedback-option.selected {
+      border-color: #667eea;
+      transform: scale(1.1);
+    }
+
+    .feedback-emoji {
+      font-size: 3rem;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="logo">💕 Love Market</div>
+    <div class="user-info">
+      <span class="credits" id="userCredits">150 ❤️</span>
+      <span id="userName">Alice</span>
+    </div>
+  </div>
+
+  <!-- Dashboard Page -->
+  <div id="dashboardPage" class="page">
+    <div class="card relationship-card">
+      <h2 class="card-title">
+        <span id="levelIcon">⚡</span> Niveau de couple : <span id="levelName">Équipe</span>
+      </h2>
+      <p style="font-size: 1.1rem;">
+        <strong id="totalCredits">320</strong> crédits échangés sur les 30 derniers jours
+      </p>
+      <div class="level-info">
+        <p style="margin: 0; font-size: 0.9rem;">
+          Prochain niveau : <strong>💫 Connecté</strong>
+        </p>
+        <p style="margin: 5px 0 0 0; font-size: 0.9rem;">
+          Encore <strong>280 crédits</strong> à échanger
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">Bonjour Alice 💕</h2>
+      <p>Tu as <strong><span id="myCredits">150</span> ❤️ crédits</strong>.</p>
+      <p>Ton partenaire : <strong>Sylvain</strong></p>
+      <p>Crédits de ton partenaire : <strong>170 ❤️</strong></p>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">Actions rapides</h3>
+      <button class="btn-primary" onclick="showPage('shopPage')">🛍️ Voir la boutique</button>
+      <button class="btn-primary" onclick="showPage('requestPage')">✨ Demander un service</button>
+      <button class="btn-secondary" onclick="showPage('donationPage')">💝 Faire un don</button>
+    </div>
+  </div>
+
+  <!-- Shop Page -->
+  <div id="shopPage" class="page hidden">
+    <div class="card">
+      <h2 class="card-title">Boutique de Sylvain</h2>
+      
+      <div class="service-card">
+        <div class="service-title">
+          <span>🥐</span>
+          <span>Petit déjeuner au lit</span>
+        </div>
+        <p>Un délicieux petit déjeuner préparé avec amour</p>
+        <div class="price">30 ❤️</div>
+        <button class="btn-primary" onclick="buyService('Petit déjeuner au lit', 30)">Acheter</button>
+      </div>
+
+      <div class="service-card">
+        <div class="service-title">
+          <span>💆</span>
+          <span>Massage relaxant 30min</span>
+        </div>
+        <p>Un moment de détente et de relaxation</p>
+        <div class="price">50 ❤️</div>
+        <button class="btn-primary" onclick="buyService('Massage relaxant', 50)">Acheter</button>
+      </div>
+
+      <div class="service-card">
+        <div class="service-title">
+          <span>🍽️</span>
+          <span>Restaurant sans enfants</span>
+        </div>
+        <p>Un dîner en amoureux, juste nous deux</p>
+        <div class="price">100 ❤️</div>
+        <button class="btn-primary" onclick="buyService('Restaurant', 100)">Acheter</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Request Service Page -->
+  <div id="requestPage" class="page hidden">
+    <div class="card">
+      <h2 class="card-title">Demander un service</h2>
+      <form onsubmit="requestService(event)">
+        <div class="form-group">
+          <label>Titre du service</label>
+          <input type="text" id="requestTitle" placeholder="Ex: Soirée cinéma" required>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="requestDesc" rows="3" placeholder="Décris ce que tu aimerais..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Prix proposé (crédits)</label>
+          <input type="number" id="requestPrice" min="1" max="150" value="30" required>
+        </div>
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="superService"> 
+            Service bonus (+30% de crédits)
+          </label>
+        </div>
+        <button type="submit" class="btn-primary">Envoyer la demande</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Donation Page -->
+  <div id="donationPage" class="page hidden">
+    <div class="card">
+      <h2 class="card-title">💝 Faire un don de crédits</h2>
+      <p>Offrir des crédits à <strong>Sylvain</strong></p>
+      <form onsubmit="donateCredits(event)">
+        <div class="form-group">
+          <label>Montant à offrir</label>
+          <input type="number" id="donationAmount" min="1" max="150" placeholder="Ex: 20" required>
+        </div>
+        <div class="form-group">
+          <label>Message (optionnel)</label>
+          <textarea id="donationMessage" rows="2" placeholder="Un petit mot..."></textarea>
+        </div>
+        <button type="submit" class="btn-primary">Faire le don</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Negotiations Page -->
+  <div id="negotiationsPage" class="page hidden">
+    <div class="card">
+      <h2 class="card-title">Négociations 💬</h2>
+      
+      <div class="service-card" style="border-left-color: #2196f3;">
+        <div class="service-title">
+          📥 Demande de service #1
+        </div>
+        <p><strong>Sylvain</strong> demande: <strong>🍽️ Dîner romantique</strong></p>
+        <div class="price">80 ❤️</div>
+        <p style="margin-top: 10px;"><span class="badge">en attente</span></p>
+        <button class="btn-primary" onclick="showFeedback()">Accepter</button>
+      </div>
+
+      <div class="service-card" style="border-left-color: #4caf50;">
+        <div class="service-title">
+          ✅ Service réalisé
+        </div>
+        <p><strong>Massage relaxant</strong> - 50 ❤️</p>
+        <p style="margin-top: 10px;"><span class="badge" style="background: #4caf50;">réalisé</span></p>
+        <div style="margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 8px;">
+          <p style="margin: 0; font-weight: bold;">Évaluation :</p>
+          <p style="margin: 5px 0 0 0; font-size: 2rem;">😊 Très satisfait</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feedback Modal -->
+  <div id="feedbackModal" class="page hidden">
+    <div class="card">
+      <h2 class="card-title">Comment s'est passé ce service ?</h2>
+      <div class="feedback-options">
+        <div class="feedback-option" onclick="selectFeedback(this, 'happy')">
+          <div class="feedback-emoji">😊</div>
+          <div>Très satisfait</div>
+        </div>
+        <div class="feedback-option" onclick="selectFeedback(this, 'neutral')">
+          <div class="feedback-emoji">😐</div>
+          <div>Correct</div>
+        </div>
+        <div class="feedback-option" onclick="selectFeedback(this, 'sad')">
+          <div class="feedback-emoji">😞</div>
+          <div>Décevant</div>
+        </div>
+      </div>
+      <button class="btn-primary" onclick="submitFeedback()">Valider</button>
+      <button class="btn-secondary" onclick="hideFeedback()">Annuler</button>
+    </div>
+  </div>
+
+  <!-- Bottom Navigation -->
+  <div class="bottom-nav">
+    <a href="#" class="nav-item active" onclick="showPage('dashboardPage')">
+      <div class="nav-icon">🏠</div>
+      <div>Accueil</div>
+    </a>
+    <a href="#" class="nav-item" onclick="showPage('shopPage')">
+      <div class="nav-icon">🛍️</div>
+      <div>Boutique</div>
+    </a>
+    <a href="#" class="nav-item" onclick="showPage('negotiationsPage')">
+      <div class="nav-icon">💬</div>
+      <div>Négociations</div>
+    </a>
+    <a href="#" class="nav-item" onclick="showPage('specialPage')">
+      <div class="nav-icon">🎯</div>
+      <div>Événements</div>
+    </a>
+  </div>
+
+  <script>
+    let userCredits = 150;
+    let selectedFeedback = null;
+
+    function showPage(pageId) {
+      // Hide all pages
+      document.querySelectorAll('.page').forEach(page => {
+        page.classList.add('hidden');
+      });
+      
+      // Show selected page
+      document.getElementById(pageId).classList.remove('hidden');
+      
+      // Update nav active state
+      document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+      });
+      event.target.closest('.nav-item')?.classList.add('active');
+      
+      // Scroll to top
+      window.scrollTo(0, 0);
+    }
+
+    function buyService(serviceName, price) {
+      if (userCredits >= price) {
+        userCredits -= price;
+        updateCredits();
+        alert(`✅ Service "${serviceName}" acheté pour ${price} ❤️!\n\nTon partenaire doit maintenant accepter la demande.`);
+        showPage('dashboardPage');
+      } else {
+        alert('❌ Crédits insuffisants!');
+      }
+    }
+
+    function requestService(event) {
+      event.preventDefault();
+      const title = document.getElementById('requestTitle').value;
+      const price = document.getElementById('requestPrice').value;
+      const superService = document.getElementById('superService').checked;
+      
+      let message = `✅ Demande envoyée: "${title}" pour ${price} ❤️`;
+      if (superService) {
+        const bonus = Math.round(price * 0.3);
+        message += `\n\n🌟 Service bonus: ton partenaire recevra ${bonus} ❤️ supplémentaires!`;
+      }
+      
+      alert(message);
+      showPage('dashboardPage');
+    }
+
+    function donateCredits(event) {
+      event.preventDefault();
+      const amount = parseInt(document.getElementById('donationAmount').value);
+      const message = document.getElementById('donationMessage').value;
+      
+      if (userCredits >= amount) {
+        userCredits -= amount;
+        updateCredits();
+        alert(`💝 Don de ${amount} ❤️ effectué à Sylvain!\n\n${message || 'Cadeau offert avec amour 💕'}`);
+        showPage('dashboardPage');
+      } else {
+        alert('❌ Crédits insuffisants!');
+      }
+    }
+
+    function showFeedback() {
+      document.getElementById('feedbackModal').classList.remove('hidden');
+      document.querySelectorAll('.page:not(#feedbackModal)').forEach(page => {
+        page.classList.add('hidden');
+      });
+    }
+
+    function hideFeedback() {
+      document.getElementById('feedbackModal').classList.add('hidden');
+      showPage('negotiationsPage');
+    }
+
+    function selectFeedback(element, feedback) {
+      document.querySelectorAll('.feedback-option').forEach(opt => {
+        opt.classList.remove('selected');
+      });
+      element.classList.add('selected');
+      selectedFeedback = feedback;
+    }
+
+    function submitFeedback() {
+      if (selectedFeedback) {
+        const emojis = { happy: '😊', neutral: '😐', sad: '😞' };
+        const labels = { happy: 'Très satisfait', neutral: 'Correct', sad: 'Décevant' };
+        alert(`✅ Service marqué comme réalisé!\n\nÉvaluation: ${emojis[selectedFeedback]} ${labels[selectedFeedback]}`);
+        hideFeedback();
+      } else {
+        alert('Veuillez sélectionner une évaluation');
+      }
+    }
+
+    function updateCredits() {
+      document.getElementById('userCredits').textContent = userCredits + ' ❤️';
+      document.getElementById('myCredits').textContent = userCredits;
+    }
+  </script>
+</body>
+</html>

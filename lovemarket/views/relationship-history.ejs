@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Historique de couple - Love Market</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="logo">💕 Love Market</div>
+      <% if (user) { %>
+      <nav class="nav">
+        <a href="/dashboard" title="Dashboard" class="<%= currentPath === '/dashboard' ? 'nav-active' : '' %>">🏠<span class="nav-text"> Accueil</span></a>
+        <a href="/shop" title="Boutique" class="<%= currentPath === '/shop' ? 'nav-active' : '' %>">🛍️<span class="nav-text"> Boutique</span></a>
+        <a href="/my-services" title="Mes services" class="<%= currentPath === '/my-services' ? 'nav-active' : '' %>">🤝<span class="nav-text"> Mes services</span></a>
+        <a href="/special-events" title="Événements spéciaux" class="<%= currentPath === '/special-events' ? 'nav-active' : '' %>">🎯<span class="nav-text"> Événements</span></a>
+        <a href="/negotiations" title="Négociations" class="nav-link-with-badge <%= currentPath === '/negotiations' ? 'nav-active' : '' %>">
+          💬<span class="nav-text"> Négociations</span>
+          <% if (notificationCount > 0) { %>
+          <span class="notification-badge"><%= notificationCount %></span>
+          <% } %>
+        </a>
+        <% if (user.role === 'admin') { %>
+        <a href="/admin" class="admin-link <%= currentPath === '/admin' ? 'nav-active' : '' %>" title="Admin">⚙️<span class="nav-text"> Admin</span></a>
+        <% } %>
+      </nav>
+      <div class="user-info">
+        <span class="credits"><%= user.credits %> ❤️</span>
+        <span class="user-name"><%= user.displayName %></span>
+        <a href="/logout" class="logout">Déconnexion</a>
+      </div>
+      <% } %>
+    </header>
+
+    <main class="page">
+      <!-- Relationship Level Card -->
+      <section class="grid">
+        <div class="card" style="grid-column: span 2; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+          <h2 class="card-title" style="color: white;">
+            <%= relationshipData.level.icon %> Niveau de couple : <%= relationshipData.level.name %>
+          </h2>
+          <p style="font-size: 1.2rem; margin: 10px 0;">
+            <strong><%= relationshipData.totalCredits %> crédits</strong> échangés sur les 30 derniers jours
+          </p>
+          <% if (relationshipData.nextLevel) { %>
+          <div style="background: rgba(255,255,255,0.2); padding: 10px; border-radius: 4px; margin-top: 10px;">
+            <p style="margin: 0; font-size: 0.9rem;">
+              Prochain niveau : <strong><%= relationshipData.nextLevel.icon %> <%= relationshipData.nextLevel.name %></strong>
+            </p>
+            <p style="margin: 5px 0 0 0; font-size: 0.9rem;">
+              Encore <strong><%= relationshipData.nextLevel.minCredits - relationshipData.totalCredits %> crédits</strong> à échanger
+            </p>
+          </div>
+          <% } else { %>
+          <p style="margin-top: 10px; font-size: 0.9rem;">
+            🎉 Niveau maximum atteint !
+          </p>
+          <% } %>
+        </div>
+      </section>
+
+      <!-- Transaction History -->
+      <section class="section">
+        <div class="card">
+          <h2 class="card-title">📜 Historique des transactions</h2>
+          <% if (transactionHistory.length === 0) { %>
+            <p>Aucune transaction récente dans les 30 derniers jours.</p>
+          <% } else { %>
+            <div class="transaction-list">
+              <% transactionHistory.forEach(function(transaction) { %>
+                <div class="transaction-item">
+                  <div class="transaction-header">
+                    <div class="transaction-date"><%= transaction.date %></div>
+                    <div class="transaction-credits"><%= transaction.totalCredits %> ❤️</div>
+                  </div>
+                  <div class="transaction-details">
+                    <% if (transaction.service) { %>
+                      <div class="transaction-service">
+                        <span class="service-icon"><%= transaction.service.icon || '💝' %></span>
+                        <span class="service-title"><%= transaction.service.title %></span>
+                      </div>
+                    <% } else if (transaction.serviceTitle) { %>
+                      <div class="transaction-service">
+                        <span class="service-icon"><%= transaction.serviceIcon || '💝' %></span>
+                        <span class="service-title"><%= transaction.serviceTitle %></span>
+                      </div>
+                    <% } %>
+                    <div class="transaction-users">
+                      <span class="from-user"><%= transaction.fromUser.displayName %></span>
+                      <span class="transaction-arrow">→</span>
+                      <span class="to-user"><%= transaction.toUser.displayName %></span>
+                    </div>
+                    <div class="transaction-type">
+                      <% if (transaction.type === 'purchase') { %>
+                        <span class="type-badge type-purchase">Achat</span>
+                      <% } else if (transaction.type === 'request') { %>
+                        <span class="type-badge type-request">Demande</span>
+                      <% } else if (transaction.type === 'donation') { %>
+                        <span class="type-badge type-donation">Don</span>
+                      <% } else if (transaction.type === 'special_event') { %>
+                        <span class="type-badge type-special">Événement</span>
+                      <% } else { %>
+                        <span class="type-badge type-negotiation">Négociation</span>
+                      <% } %>
+                      <% if (transaction.status === 'realized') { %>
+                        <span class="status-badge status-realized">✅ Réalisé</span>
+                      <% } else if (transaction.status === 'accepted') { %>
+                        <span class="status-badge status-accepted">✅ Accepté</span>
+                      <% } %>
+                    </div>
+                    <% if (transaction.comment) { %>
+                      <div class="transaction-comment">"<%= transaction.comment %>"</div>
+                    <% } %>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+      </section>
+    </main>
+
+    <style>
+      .transaction-list {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+      
+      .transaction-item {
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 15px;
+        background: #fafafa;
+      }
+      
+      .transaction-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #eee;
+      }
+      
+      .transaction-date {
+        font-size: 0.9rem;
+        color: #666;
+      }
+      
+      .transaction-credits {
+        font-weight: bold;
+        color: #e91e63;
+      }
+      
+      .transaction-details {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      
+      .transaction-service {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      
+      .service-icon {
+        font-size: 1.2rem;
+      }
+      
+      .transaction-users {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.9rem;
+      }
+      
+      .transaction-type {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      
+      .type-badge, .status-badge {
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: bold;
+      }
+      
+      .type-purchase { background: #e3f2fd; color: #1976d2; }
+      .type-request { background: #f3e5f5; color: #7b1fa2; }
+      .type-donation { background: #e8f5e9; color: #388e3c; }
+      .type-special { background: #fff3e0; color: #f57c00; }
+      .type-negotiation { background: #fff8e1; color: #f57c00; }
+      
+      .status-realized { background: #e8f5e9; color: #388e3c; }
+      .status-accepted { background: #e3f2fd; color: #1976d2; }
+      
+      .transaction-comment {
+        font-style: italic;
+        color: #666;
+        padding: 8px;
+        background: #f5f5f5;
+        border-radius: 4px;
+        margin-top: 5px;
+      }
+    </style>
+  </body>
+</html>

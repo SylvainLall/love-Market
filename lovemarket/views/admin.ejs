@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Admin - Love Market</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="logo">💕 Love Market</div>
+      <% if (user) { %>
+      <nav class="nav">
+        <a href="/dashboard" title="Dashboard" class="<%= currentPath === '/dashboard' ? 'nav-active' : '' %>">🏠<span class="nav-text"> Accueil</span></a>
+        <a href="/shop" title="Boutique" class="<%= currentPath === '/shop' ? 'nav-active' : '' %>">🛍️<span class="nav-text"> Boutique</span></a>
+        <a href="/my-services" title="Mes services" class="<%= currentPath === '/my-services' ? 'nav-active' : '' %>">💼<span class="nav-text"> Mes services</span></a>
+        <a href="/negotiations" title="Négociations" class="nav-link-with-badge <%= currentPath === '/negotiations' ? 'nav-active' : '' %>">
+          💬<span class="nav-text"> Négociations</span>
+          <% if (notificationCount > 0) { %>
+          <span class="notification-badge"><%= notificationCount %></span>
+          <% } %>
+        </a>
+        <% if (user.role === 'admin') { %>
+        <a href="/admin" class="admin-link <%= currentPath === '/admin' ? 'nav-active' : '' %>" title="Admin">⚙️<span class="nav-text"> Admin</span></a>
+        <% } %>
+      </nav>
+      <div class="user-info">
+        <span class="credits"><%= user.credits %> ❤️</span>
+        <span class="user-name"><%= user.displayName %></span>
+        <a href="/logout" class="logout">Déconnexion</a>
+      </div>
+      <% } %>
+    </header>
+
+    <main class="page">
+      <section class="section">
+        <h1 class="section-title">Panneau d'administration 🛡️</h1>
+
+        <div class="card">
+          <h2 class="card-title">Utilisateurs & crédits</h2>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Utilisateur</th>
+                <th>Rôle</th>
+                <th>Crédits</th>
+                <th>Définir les crédits</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% users.forEach(function(u) { %>
+              <tr>
+                <td><%= u.displayName %> (<%= u.id %>)</td>
+                <td><%= u.role %></td>
+                <td><%= u.credits %> ❤️</td>
+                <td>
+                  <form method="post" action="/admin/credits" class="inline-form">
+                    <input type="hidden" name="targetId" value="<%= u.id %>" />
+                    <input
+                      type="number"
+                      name="credits"
+                      min="0"
+                      step="1"
+                      value="<%= u.credits %>"
+                    />
+                    <button type="submit" class="btn-secondary">Mettre à jour</button>
+                  </form>
+                </td>
+              </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- NEW: Gift Vouchers Section -->
+        <div class="card">
+          <h2 class="card-title">Créer un bon cadeau 🎁</h2>
+          <form method="post" action="/admin/gift-voucher" class="form">
+            <label>
+              Crédits à offrir
+              <input 
+                type="number" 
+                name="credits" 
+                min="1" 
+                step="1" 
+                placeholder="Ex: 50" 
+                required 
+              />
+            </label>
+            <label>
+              Commentaire (optionnel)
+              <textarea 
+                name="comment" 
+                rows="2" 
+                placeholder="Un petit mot d'accompagnement...">
+              </textarea>
+            </label>
+            <button type="submit" class="btn-primary">Générer le bon cadeau</button>
+          </form>
+        </div>
+
+        <!-- NEW: Voucher List -->
+        <div class="card">
+          <h2 class="card-title">Bons cadeaux existants 🎟️</h2>
+          <% if (giftVouchers.length === 0) { %>
+          <p>Aucun bon cadeau n'a été créé pour le moment.</p>
+          <% } else { %>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Crédits</th>
+                <th>Commentaire</th>
+                <th>Statut</th>
+                <th>Date de création</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% giftVouchers.forEach(function(voucher) { %>
+              <tr>
+                <td><%= voucher.code %></td>
+                <td><%= voucher.credits %> ❤️</td>
+                <td><%= voucher.comment || '-' %></td>
+                <td>
+                  <% if (voucher.used) { %>
+                  <span class="badge status-rejected">Utilisé</span>
+                  <% } else { %>
+                  <span class="badge status-accepted">Disponible</span>
+                  <% } %>
+                </td>
+                <td><%= new Date(voucher.createdAt).toLocaleString('fr-FR') %></td>
+                <td>
+                  <% if (!voucher.used) { %>
+                  <a href="/gift-voucher/<%= voucher.code %>" target="_blank" class="btn-secondary">Imprimer</a>
+                  <% } else { %>
+                  <span>Utilisé</span>
+                  <% } %>
+                </td>
+              </tr>
+              <% }) %>
+            </tbody>
+          </table>
+          <% } %>
+        </div>
+
+        <!-- NEW: Special Events Section -->
+        <div class="card">
+          <h2 class="card-title">🎫 Gestion des événements spéciaux</h2>
+          <form method="post" action="/admin/special-event" class="form">
+            <label>
+              Titre de l'événement
+              <input type="text" name="title" placeholder="Ex: Faire une surprise à ton partenaire" required />
+            </label>
+            <label>
+              Description
+              <textarea name="description" rows="3" placeholder="Décris ce que l'utilisateur doit faire..." required></textarea>
+            </label>
+            <label>
+              Crédits à gagner
+              <input type="number" name="credits" min="1" placeholder="Ex: 20" required />
+            </label>
+            <label>
+              Destinataire
+              <select name="targetUser">
+                <option value="both">Les deux utilisateurs</option>
+                <option value="Alice">Alice uniquement</option>
+                <option value="Sylvain">Sylvain uniquement</option>
+              </select>
+            </label>
+            <button type="submit" class="btn-primary">Créer l'événement</button>
+          </form>
+          
+          <% if (specialEvents && specialEvents.length > 0) { %>
+          <h3>Événements actifs</h3>
+          <div class="table-container">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Titre</th>
+                  <th>Description</th>
+                  <th>Crédits</th>
+                  <th>Destinataire</th>
+                  <th>Statut</th>
+                  <th>Créé le</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% specialEvents.forEach(function(event) { %>
+                <tr>
+                  <td><%= event.title %></td>
+                  <td><%= event.description %></td>
+                  <td><%= event.credits %> ❤️</td>
+                  <td>
+                    <% if (event.targetUser === 'both') { %>
+                      Les deux
+                    <% } else { %>
+                      <%= event.targetUser %>
+                    <% } %>
+                  </td>
+                  <td>
+                    <% if (event.status === 'active') { %>
+                      <span class="status-active">Actif</span>
+                    <% } else if (event.status === 'completed') { %>
+                      <span class="status-completed">Complété</span>
+                    <% } else { %>
+                      <span class="status-cancelled">Annulé</span>
+                    <% } %>
+                  </td>
+                  <td><%= new Date(event.createdAt).toLocaleDateString('fr-FR') %></td>
+                </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+          <% } else { %>
+          <p>Aucun événement spécial actif.</p>
+          <% } %>
+        </div>
+
+        <!-- NEW: Relationship Levels Management -->
+        <div class="card">
+          <h2 class="card-title">💕 Gestion des niveaux de couple</h2>
+          <p class="hint">Configurez les seuils de crédits pour chaque niveau de relation (calculé sur les 30 derniers jours glissants)</p>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Niveau</th>
+                <th>Icône</th>
+                <th>Seuil minimum (crédits)</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% relationshipLevels.forEach(function(level, index) { %>
+              <tr>
+                <td><strong><%= level.name %></strong></td>
+                <td><%= level.icon %></td>
+                <td>
+                  <form method="post" action="/admin/relationship-levels" class="inline-form">
+                    <input type="hidden" name="levelIndex" value="<%= index %>" />
+                    <input 
+                      type="number" 
+                      name="minCredits" 
+                      min="0" 
+                      step="1" 
+                      value="<%= level.minCredits %>" 
+                      style="width: 100px;"
+                    />
+                    <button type="submit" class="btn-secondary">Mettre à jour</button>
+                  </form>
+                </td>
+              </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
