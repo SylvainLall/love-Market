@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Négociations - Love Market</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="logo">💕 Love Market</div>
+      <% if (user) { %>
+      <nav class="nav">
+        <a href="/dashboard" title="Dashboard" class="<%= currentPath === '/dashboard' ? 'nav-active' : '' %>">🏠<span class="nav-text"> Accueil</span></a>
+        <a href="/shop" title="Boutique" class="<%= currentPath === '/shop' ? 'nav-active' : '' %>">🛍️<span class="nav-text"> Boutique</span></a>
+        <a href="/my-services" title="Mes services" class="<%= currentPath === '/my-services' ? 'nav-active' : '' %>">🤝<span class="nav-text"> Mes services</span></a>
+        <a href="/negotiations" title="Négociations" class="nav-link-with-badge <%= currentPath === '/negotiations' ? 'nav-active' : '' %>">
+          💬<span class="nav-text"> Négociations</span>
+          <% if (notificationCount > 0) { %>
+          <span class="notification-badge"><%= notificationCount %></span>
+          <% } %>
+        </a>
+        <% if (user.role === 'admin') { %>
+        <a href="/admin" class="admin-link <%= currentPath === '/admin' ? 'nav-active' : '' %>" title="Admin">⚙️<span class="nav-text"> Admin</span></a>
+        <% } %>
+      </nav>
+      <div class="user-info">
+        <span class="credits"><%= user.credits %> ❤️</span>
+        <span class="user-name"><%= user.displayName %></span>
+        <a href="/logout" class="logout">Déconnexion</a>
+      </div>
+      <% } %>
+    </header>
+
+    <main class="page">
+      <section class="section">
+        <h1 class="section-title">Négociations 💌</h1>
+
+        <% if (!offers.length) { %>
+        <p>Aucune négociation pour le moment.</p>
+        <% } %>
+
+        <div class="cards">
+          <% 
+          // Group offers by rootOfferId or by their own id if no root
+          const grouped = {};
+          offers.forEach(function(o) {
+            const groupId = o.rootOfferId || o.id;
+            if (!grouped[groupId]) {
+              grouped[groupId] = [];
+            }
+            grouped[groupId].push(o);
+          });
+          
+          // Display each group
+          Object.keys(grouped).forEach(function(groupId) {
+            const group = grouped[groupId];
+            // Sort by id to show chronological order
+            group.sort((a, b) => parseInt(a.id) - parseInt(b.id));
+            const firstOffer = group[0];
+          %>
+          <div class="card negotiation-group" style="<% 
+            if (firstOffer.type === 'request') { 
+              const isProvider = firstOffer.toUserId === user.id && firstOffer.originalRequesterId !== user.id;
+              if (isProvider) { %>
+                border-left: 5px solid #2196F3;
+              <% } else { %>
+                border-left: 5px solid #FF9800;
+              <% } 
+            } else if (firstOffer.type === 'purchase') { %>
+              border-left: 5px solid #4CAF50;
+            <% } %>">
+            <h2 class="card-title">
+              <% if (firstOffer.type === 'purchase') { %>
+              🛍️ Demande d'achat #<%= firstOffer.id %>
+              <% } else if (firstOffer.type === 'request') { %>
+                <% 
+                  const isProvider = firstOffer.toUserId === user.id && firstOffer.originalRequesterId !== user.id;
+                  if (isProvider) { 
+                %>
+                  📥 Demande de service #<%= firstOffer.id %> <span style="color: #2196F3; font-size: 0.9rem;">(on te demande)</span>
+                <% } else { %>
+                  📤 Proposition de service #<%= firstOffer.id %> <span style="color: #FF9800; font-size: 0.9rem;">(tu proposes)</span>
+                <% } %>
+              <% } else { %>
+              💬 Négociation #<%= firstOffer.id %>
+              <% } %>
+              <% if (group.length > 1) { %>
+              <span class="badge" style="background: #fff9c4; margin-left: 8px;"><%= group.length %> offres</span>
+              <% } %>
+            </h2>
+            
+            <!-- Show all offers in this group -->
+            <% group.forEach(function(o, index) { %>
+            <div class="offer-item <%= index > 0 ? 'counter-offer-item' : '' %>" style="<%= index > 0 ? 'margin-top: 16px; padding-top: 16px; border-top: 2px dashed #e0e0e0;' : '' %>">
+              <% if (index > 0) { %>
+              <p style="color: #ff6b9d; font-weight: 600; margin: 0 0 8px 0;">🔄 Contre-proposition #<%= o.id %></p>
+              <% } %>
+              
+              <p>Service :
+                <strong>
+                  <% if (o.serviceTitle) { %>
+                    <%= o.serviceIcon || '💗' %> <%= o.serviceTitle %>
+                  <% } else if (o.service) { %>
+                    <%= o.service.icon || '💗' %> <%= o.service.title %>
+                  <% } else { %>
+                    #<%= o.serviceId %>
+                  <% } %>
+                </strong>
+              </p>
+              <% if (o.serviceCategory) { %>
+              <p class="category"><%= o.serviceCategory %></p>
+              <% } %>
+              <p>
+                De <strong><%= o.fromUser.displayName %></strong> à
+                <strong><%= o.toUser.displayName %></strong>
+              </p>
+              <p>Prix : <strong><%= o.offeredPrice %> ❤️</strong></p>
+              <% if (o.type === 'purchase' && index === 0) { %>
+              <p class="info">⚠️ Les crédits ont déjà été débités de l'acheteur.</p>
+              <% } %>
+              <% if (o.comment) { %>
+              <p class="comment">« <%= o.comment %> »</p>
+              <% } %>
+              <% if (o.isSuperService) { %>
+              <p class="super-service-badge">🌟 Service bonus : +<%= o.superServiceBonus %> ❤️ crédits supplémentaires pour le prestataire !</p>
+              <% } %>
+              <p>
+                Statut : <span class="badge status-<%= o.status %>">
+                  <% if (o.status === 'pending') { %>
+                    en attente
+                  <% } else if (o.status === 'accepted') { %>
+                    acceptée
+                  <% } else if (o.status === 'rejected') { %>
+                    refusée
+                  <% } else if (o.status === 'countered') { %>
+                    contre-proposition
+                  <% } else if (o.status === 'realized') { %>
+                    réalisé
+                  <% } else { %>
+                    <%= o.status %>
+                  <% } %>
+                </span>
+              </p>
+
+              <% 
+                var isBuyer = false;
+                if (o.type === 'purchase') {
+                  isBuyer = (o.fromUserId === user.id);
+                } else if (o.type === 'request') {
+                  if (o.originalRequesterId) {
+                    isBuyer = (o.originalRequesterId === user.id);
+                  } else {
+                    isBuyer = (o.fromUserId === user.id);
+                  }
+                } else {
+                  isBuyer = (o.fromUserId === user.id);
+                }
+              %>
+
+              <% if (o.toUserId === user.id && o.status === 'pending') { %>
+              <form method="post" action="/offers/<%= o.id %>/respond" class="inline-form">
+                <button type="submit" name="action" value="accept" class="btn-primary">
+                  Accepter
+                </button>
+                <button type="submit" name="action" value="reject" class="btn-secondary">
+                  <% if (o.type === 'purchase') { %>
+                  Refuser (remboursement)
+                  <% } else { %>
+                  Refuser
+                  <% } %>
+                </button>
+              </form>
+              
+              <% if (o.type !== 'purchase') { %>
+              <details class="counter-offer-form">
+                <summary class="btn-secondary">Faire une contre-proposition</summary>
+                <form method="post" action="/offers/<%= o.id %>/respond" class="form" style="margin-top: 12px;">
+                  <label>
+                    Nouveau prix proposé (❤️)
+                    <input 
+                      type="number" 
+                      name="counterPrice" 
+                      min="0" 
+                      step="1" 
+                      value="<%= o.offeredPrice %>" 
+                      required
+                    />
+                  </label>
+                  <label>
+                    Commentaire (optionnel)
+                    <input 
+                      type="text" 
+                      name="counterComment" 
+                      placeholder="Votre message..."
+                    />
+                  </label>
+                  <button type="submit" name="action" value="counter" class="btn-primary">
+                    Envoyer la contre-offre
+                  </button>
+                </form>
+              </details>
+              <% } %>
+              <% } %>
+
+              <% if (o.status === 'accepted' && isBuyer) { %>
+              <details class="feedback-form" style="margin-top: 10px;">
+                <summary class="btn-secondary">Déclarer réalisé</summary>
+                <form method="post" action="/offers/<%= o.id %>/realize" class="form" style="margin-top: 12px;">
+                  <p style="margin: 0 0 10px 0; font-weight: bold;">Comment s'est passé ce service ?</p>
+                  <div style="display: flex; gap: 15px; justify-content: center; margin: 15px 0;">
+                    <label style="cursor: pointer; text-align: center;">
+                      <input type="radio" name="feedback" value="happy" required style="display: none;" />
+                      <div class="feedback-option" data-value="happy" style="font-size: 3rem; padding: 10px; border: 3px solid transparent; border-radius: 10px; transition: all 0.3s;">
+                        😊
+                      </div>
+                      <div style="font-size: 0.9rem; margin-top: 5px;">Très satisfait</div>
+                    </label>
+                    <label style="cursor: pointer; text-align: center;">
+                      <input type="radio" name="feedback" value="neutral" required style="display: none;" />
+                      <div class="feedback-option" data-value="neutral" style="font-size: 3rem; padding: 10px; border: 3px solid transparent; border-radius: 10px; transition: all 0.3s;">
+                        😐
+                      </div>
+                      <div style="font-size: 0.9rem; margin-top: 5px;">Correct</div>
+                    </label>
+                    <label style="cursor: pointer; text-align: center;">
+                      <input type="radio" name="feedback" value="sad" required style="display: none;" />
+                      <div class="feedback-option" data-value="sad" style="font-size: 3rem; padding: 10px; border: 3px solid transparent; border-radius: 10px; transition: all 0.3s;">
+                        😞
+                      </div>
+                      <div style="font-size: 0.9rem; margin-top: 5px;">Décevant</div>
+                    </label>
+                  </div>
+                  <button type="submit" class="btn-primary">Valider et marquer comme réalisé</button>
+                </form>
+              </details>
+              <% } %>
+              
+              <% if (o.status === 'realized' && o.feedback) { %>
+              <div style="margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px;">
+                <p style="margin: 0; font-weight: bold;">Évaluation :</p>
+                <p style="margin: 5px 0 0 0; font-size: 2rem;">
+                  <% if (o.feedback === 'happy') { %>
+                    😊 Très satisfait
+                  <% } else if (o.feedback === 'neutral') { %>
+                    😐 Correct
+                  <% } else if (o.feedback === 'sad') { %>
+                    😞 Décevant
+                  <% } %>
+                </p>
+              </div>
+              <% } %>
+            </div>
+            <% }) %>
+          </div>
+          <% }) %>
+        </div>
+      </section>
+    </main>
+    <script>
+      // Feedback selection interaction
+      document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.feedback-option').forEach(function(option) {
+          option.addEventListener('click', function() {
+            const label = this.closest('label');
+            const radio = label.querySelector('input[type="radio"]');
+            
+            // Remove selection from all options in this form
+            const form = label.closest('form');
+            form.querySelectorAll('.feedback-option').forEach(function(opt) {
+              opt.style.borderColor = 'transparent';
+              opt.style.transform = 'scale(1)';
+            });
+            
+            // Highlight selected option
+            this.style.borderColor = '#667eea';
+            this.style.transform = 'scale(1.1)';
+            
+            // Check the radio button
+            radio.checked = true;
+          });
+        });
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title><%= title || 'Love Market' %></title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="logo">💕 Love Market</div>
+      <% if (user) { %>
+      <nav class="nav">
+        <a href="/dashboard">Dashboard</a>
+        <a href="/shop">Shop</a>
+        <a href="/my-services">My Services</a>
+        <a href="/negotiations">Negotiations</a>
+        <% if (user.role === 'admin') { %>
+        <a href="/admin" class="admin-link">Admin</a>
+        <% } %>
+      </nav>
+      <div class="user-info">
+        <span class="credits"><%= user.credits %> ❤️</span>
+        <span class="user-name"><%= user.displayName %></span>
+        <a href="/logout" class="logout">Logout</a>
+      </div>
+      <% } %>
+    </header>
+
+    <main class="page">
+      <%- body %>
+    </main>
+  </body>
+</html>

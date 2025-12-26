@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Bon Cadeau - Love Market</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        font-family: 'Arial', sans-serif;
+        background: linear-gradient(135deg, #ffafbd, #ffc3a0);
+        margin: 0;
+        padding: 20px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+      }
+      
+      .voucher {
+        background: white;
+        border-radius: 20px;
+        padding: 40px;
+        width: 90%;
+        max-width: 500px;
+        text-align: center;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        position: relative;
+        overflow: hidden;
+      }
+      
+      .voucher::before {
+        content: "";
+        position: absolute;
+        top: -50px;
+        right: -50px;
+        width: 150px;
+        height: 150px;
+        background: rgba(255, 79, 139, 0.1);
+        border-radius: 50%;
+      }
+      
+      .voucher::after {
+        content: "";
+        position: absolute;
+        bottom: -50px;
+        left: -50px;
+        width: 150px;
+        height: 150px;
+        background: rgba(255, 195, 160, 0.1);
+        border-radius: 50%;
+      }
+      
+      .title {
+        color: #ff4f8b;
+        font-size: 2.5rem;
+        margin: 0 0 20px 0;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+      }
+      
+      .subtitle {
+        color: #666;
+        font-size: 1.2rem;
+        margin-bottom: 30px;
+      }
+      
+      .heart {
+        font-size: 3rem;
+        margin: 20px 0;
+        color: #ff4f8b;
+        animation: pulse 2s infinite;
+      }
+      
+      .code {
+        background: #fff0f5;
+        padding: 20px;
+        border-radius: 15px;
+        font-size: 1.8rem;
+        font-weight: bold;
+        color: #ff4f8b;
+        letter-spacing: 2px;
+        margin: 20px 0;
+        border: 2px dashed #ff4f8b;
+      }
+      
+      .amount {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #ff4f8b;
+        margin: 20px 0;
+      }
+      
+      .comment {
+        font-style: italic;
+        color: #666;
+        margin: 20px 0;
+        padding: 10px;
+        border-left: 3px solid #ff4f8b;
+      }
+      
+      .instructions {
+        background: #f5f5f5;
+        padding: 15px;
+        border-radius: 10px;
+        margin-top: 20px;
+        font-size: 0.9rem;
+        color: #666;
+      }
+      
+      .decoration {
+        display: flex;
+        justify-content: space-around;
+        margin: 20px 0;
+      }
+      
+      .decoration span {
+        font-size: 1.5rem;
+        animation: float 3s ease-in-out infinite;
+      }
+      
+      .decoration span:nth-child(2) {
+        animation-delay: 0.5s;
+      }
+      
+      .decoration span:nth-child(3) {
+        animation-delay: 1s;
+      }
+      
+      @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+      }
+      
+      @keyframes float {
+        0% { transform: translateY(0px); }
+        50% { transform: translateY(-10px); }
+        100% { transform: translateY(0px); }
+      }
+      
+      @media print {
+        body {
+          background: white;
+          padding: 0;
+        }
+        
+        .voucher {
+          box-shadow: none;
+          width: 100%;
+          max-width: 100%;
+          border: 1px solid #ccc;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="voucher">
+      <h1 class="title">🎁 Bon Cadeau</h1>
+      <p class="subtitle">Love Market</p>
+      
+      <div class="decoration">
+        <span>💕</span>
+        <span>💝</span>
+        <span>💖</span>
+      </div>
+      
+      <div class="heart">💖</div>
+      
+      <p class="subtitle">Pour vous faire plaisir...</p>
+      
+      <div class="amount"><%= voucher.credits %> ❤️ crédits</div>
+      
+      <% if (voucher.comment) { %>
+      <div class="comment">"<%= voucher.comment %>"</div>
+      <% } %>
+      
+      <div class="code"><%= voucher.code %></div>
+      
+      <div class="instructions">
+        <p>Pour utiliser ce bon, connectez-vous à Love Market et rendez-vous sur la page d'accueil.</p>
+        <p>Cliquez sur l'icône 🎁 en bas de la page et entrez le code à 4 chiffres.</p>
+      </div>
+      
+      <div class="decoration">
+        <span>💗</span>
+        <span>💞</span>
+        <span>💕</span>
+      </div>
+    </div>
+  </body>
+</html>

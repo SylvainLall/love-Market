@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Événements Spéciaux - Love Market</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="logo">💕 Love Market</div>
+      <% if (user) { %>
+      <nav class="nav">
+        <a href="/dashboard" title="Dashboard" class="<%= currentPath === '/dashboard' ? 'nav-active' : '' %>">🏠<span class="nav-text"> Accueil</span></a>
+        <a href="/shop" title="Boutique" class="<%= currentPath === '/shop' ? 'nav-active' : '' %>">🛍️<span class="nav-text"> Boutique</span></a>
+        <a href="/my-services" title="Mes services" class="<%= currentPath === '/my-services' ? 'nav-active' : '' %>">🤝<span class="nav-text"> Mes services</span></a>
+        <a href="/negotiations" title="Négociations" class="nav-link-with-badge <%= currentPath === '/negotiations' ? 'nav-active' : '' %>">
+          💬<span class="nav-text"> Négociations</span>
+          <% if (notificationCount > 0) { %>
+          <span class="notification-badge"><%= notificationCount %></span>
+          <% } %>
+        </a>
+        <% if (user.role === 'admin') { %>
+        <a href="/admin" class="admin-link <%= currentPath === '/admin' ? 'nav-active' : '' %>" title="Admin">⚙️<span class="nav-text"> Admin</span></a>
+        <% } %>
+      </nav>
+      <div class="user-info">
+        <span class="credits"><%= user.credits %> ❤️</span>
+        <span class="user-name"><%= user.displayName %></span>
+        <a href="/logout" class="logout">Déconnexion</a>
+      </div>
+      <% } %>
+    </header>
+
+    <main class="page">
+      <section class="section">
+        <h1 class="section-title">🎯 Événements Spéciaux</h1>
+        
+        <% if (typeof error !== 'undefined' && error) { %>
+        <div class="error"><%= error %></div>
+        <% } %>
+        <% if (typeof success !== 'undefined' && success) { %>
+        <div class="alert alert-success">
+          <p style="margin: 0;"><%= success %></p>
+        </div>
+        <% } %>
+        
+        <% if (events.length === 0) { %>
+        <div class="card">
+          <p>Aucun événement spécial disponible pour le moment.</p>
+        </div>
+        <% } else { %>
+        <div class="cards">
+          <% events.forEach(function(event) { %>
+          <div class="card">
+            <h2 class="card-title">
+              <span class="service-icon">🎯</span>
+              <%= event.title %>
+            </h2>
+            <p class="category">Événement spécial</p>
+            <p><%= event.description %></p>
+            <p class="price"><%= event.credits %> ❤️ crédits</p>
+            
+            <% if (event.assignedTo) { %>
+              <% if (event.assignedTo === user.id) { %>
+                <% if (event.completedBy) { %>
+                  <p class="info">✅ Vous avez complété cet événement</p>
+                <% } else { %>
+                  <p class="info">vous avez accepté cet événement</p>
+                  <form method="post" action="/special-events/<%= event.id %>/complete" class="inline-form">
+                    <button type="submit" class="btn-primary">J'ai complété l'événement</button>
+                  </form>
+                <% } %>
+              <% } else { %>
+                <p class="info">assigné à un autre utilisateur</p>
+              <% } %>
+            <% } else { %>
+              <form method="post" action="/special-events/<%= event.id %>/accept" class="inline-form">
+                <button type="submit" class="btn-primary">Accepter l'événement</button>
+              </form>
+            <% } %>
+          </div>
+          <% }) %>
+        </div>
+        <% } %>
+      </section>
+    </main>
+  </body>
+</html>

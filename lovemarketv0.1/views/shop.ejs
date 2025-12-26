@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Boutique - Love Market</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="logo">💕 Love Market</div>
+      <% if (user) { %>
+      <nav class="nav">
+        <a href="/dashboard" title="Dashboard" class="<%= currentPath === '/dashboard' ? 'nav-active' : '' %>">🏠<span class="nav-text"> Accueil</span></a>
+        <a href="/shop" title="Boutique" class="<%= currentPath === '/shop' ? 'nav-active' : '' %>">🛍️<span class="nav-text"> Boutique</span></a>
+        <a href="/my-services" title="Mes services" class="<%= currentPath === '/my-services' ? 'nav-active' : '' %>">🤝<span class="nav-text"> Mes services</span></a>
+        <a href="/negotiations" title="Négociations" class="nav-link-with-badge <%= currentPath === '/negotiations' ? 'nav-active' : '' %>">
+          💬<span class="nav-text"> Négociations</span>
+          <% if (notificationCount > 0) { %>
+          <span class="notification-badge"><%= notificationCount %></span>
+          <% } %>
+        </a>
+        <% if (user.role === 'admin') { %>
+        <a href="/admin" class="admin-link <%= currentPath === '/admin' ? 'nav-active' : '' %>" title="Admin">⚙️<span class="nav-text"> Admin</span></a>
+        <% } %>
+      </nav>
+      <div class="user-info">
+        <span class="credits"><%= user.credits %> ❤️</span>
+        <span class="user-name"><%= user.displayName %></span>
+        <a href="/logout" class="logout">Déconnexion</a>
+      </div>
+      <% } %>
+    </header>
+
+    <main class="page">
+      <section class="section">
+        <h1 class="section-title">Boutique de ton partenaire 💝</h1>
+        <% if (partner) { %>
+        <p>
+          Tes crédits : <strong><%= user.credits %> ❤️</strong> — Crédits de ton/ta partenaire
+          <strong><%= partner.credits %> ❤️</strong>
+        </p>
+        <% } %>
+        <% if (!services.length) { %>
+        <p>Ton partenaire n’a encore rien mis en vente. Tu peux lui suggérer une idée douce.</p>
+        <% } %>
+
+        <div class="cards">
+          <% services.forEach(function(service) { %>
+          <div class="card">
+            <h2 class="card-title">
+              <span class="service-icon"><%= service.icon || '💗' %></span>
+              <%= service.title %>
+            </h2>
+            <p class="category"><%= service.category %></p>
+            <% if (service.description) { %>
+            <p><%= service.description %></p>
+            <% } %>
+            <p class="price"><%= service.price %> ❤️</p>
+            <form 
+              method="post" 
+              action="/services/<%= service.id %>/buy" 
+              class="inline-form"
+              onsubmit="return confirmPurchase(<%= service.price %>, <%= user.credits %>)"
+            >
+              <button type="submit" class="btn-primary">Acheter</button>
+            </form>
+            <form method="post" action="/services/<%= service.id %>/offer" class="offer-form">
+              <input
+                type="number"
+                name="offeredPrice"
+                min="0"
+                step="1"
+                placeholder="Ta proposition"
+                required
+              />
+              <input
+                type="text"
+                name="comment"
+                placeholder="Ajoute un petit mot"
+              />
+              <button type="submit" class="btn-secondary">Négocier</button>
+            </form>
+          </div>
+          <% }) %>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      function confirmPurchase(price, currentCredits) {
+        if (currentCredits < price) {
+          alert(
+            "Crédits insuffisants !\n\n" +
+            "Prix : " + price + " ❤️\n" +
+            "Votre solde : " + currentCredits + " ❤️\n" +
+            "Il vous manque " + (price - currentCredits) + " ❤️"
+          );
+          return false;
+        }
+        
+        const newBalance = currentCredits - price;
+        const message = 
+          "Êtes-vous sûr de vouloir acheter ce service ?\n\n" +
+          "Solde actuel : " + currentCredits + " ❤️\n" +
+          "Prix : " + price + " ❤️\n" +
+          "Nouveau solde : " + newBalance + " ❤️\n\n" +
+          "Les crédits seront débités immédiatement.\n" +
+          "Votre partenaire devra accepter la demande.\n" +
+          "Si refusé, vous serez remboursé.";
+        
+        return confirm(message);
+      }
+    </script>
+  </body>
+</html>

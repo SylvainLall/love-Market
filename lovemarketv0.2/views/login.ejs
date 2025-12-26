@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Connexion - Love Market</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="logo">💕 Love Market</div>
+    </header>
+
+    <main class="page">
+      <section class="center-card">
+        <div class="card card-login">
+          <h1 class="title">Bienvenue sur Love Market</h1>
+          <p class="subtitle">Connecte-toi comme Alice ou Sylvain pour commencer le jeu 💕</p>
+
+          <% if (error) { %>
+          <div class="error"><%= error %></div>
+          <% } %>
+
+          <form method="post" action="/login" class="form">
+            <label>
+              Identifiant
+              <input type="text" name="userId" placeholder="Alice ou Sylvain" required />
+            </label>
+            <label>
+              Mot de passe
+              <input type="password" name="password" placeholder="Ton mot de passe" required />
+            </label>
+            <button type="submit" class="btn-primary">Se connecter</button>
+          </form>
+
+          <div class="hint" style="margin-top: 20px;">
+            <p><em>Contacte ton partenaire pour obtenir tes identifiants.</em></p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

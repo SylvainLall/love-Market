@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Demander un service - Love Market</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="logo">💕 Love Market</div>
+      <% if (user) { %>
+      <nav class="nav">
+        <a href="/dashboard" title="Dashboard" class="<%= currentPath === '/dashboard' ? 'nav-active' : '' %>">🏠<span class="nav-text"> Accueil</span></a>
+        <a href="/shop" title="Boutique" class="<%= currentPath === '/shop' ? 'nav-active' : '' %>">🛍️<span class="nav-text"> Boutique</span></a>
+        <a href="/my-services" title="Mes services" class="<%= currentPath === '/my-services' ? 'nav-active' : '' %>">🤝<span class="nav-text"> Mes services</span></a>
+        <a href="/negotiations" title="Négociations" class="nav-link-with-badge <%= currentPath === '/negotiations' ? 'nav-active' : '' %>">
+          💬<span class="nav-text"> Négociations</span>
+          <% if (notificationCount > 0) { %>
+          <span class="notification-badge"><%= notificationCount %></span>
+          <% } %>
+        </a>
+        <% if (user.role === 'admin') { %>
+        <a href="/admin" class="admin-link <%= currentPath === '/admin' ? 'nav-active' : '' %>" title="Admin">⚙️<span class="nav-text"> Admin</span></a>
+        <% } %>
+      </nav>
+      <div class="user-info">
+        <span class="credits"><%= user.credits %> ❤️</span>
+        <span class="user-name"><%= user.displayName %></span>
+        <a href="/logout" class="logout">Déconnexion</a>
+      </div>
+      <% } %>
+    </header>
+
+    <main class="page">
+      <section class="section">
+        <h1 class="section-title">Demander un service personnalisé ✨</h1>
+
+        <div class="card">
+          <h2 class="card-title">Nouvelle demande à <%= partner.displayName %></h2>
+          <p class="hint">
+            Demande un service qui n'est pas en vente. Ton/ta partenaire pourra accepter, 
+            refuser ou faire une contre-proposition.
+          </p>
+
+          <form method="post" action="/request-service" class="form">
+            <label>
+              Titre du service souhaité
+              <input 
+                type="text" 
+                name="title" 
+                placeholder="Ex: Soirée cinéma à la maison" 
+                required 
+              />
+            </label>
+
+            <label>
+              Description / commentaire
+              <textarea 
+                name="description" 
+                rows="3" 
+                placeholder="Décris ce que tu aimerais..."
+              ></textarea>
+            </label>
+
+            <label>
+              Catégorie
+              <select name="category">
+                <option value="Romantique">Romantique</option>
+                <option value="Détente">Détente</option>
+                <option value="Fun">Fun</option>
+                <option value="Maison">Maison</option>
+                <option value="Sortie">Sortie</option>
+                <option value="Famille">Famille</option>
+                <option value="Enfants">Enfants</option>
+                <option value="Cuisine">Cuisine</option>
+                <option value="Voyage">Voyage</option>
+                <option value="Bien-être">Bien-être</option>
+              </select>
+            </label>
+
+            <label>
+              Icône
+              <select name="icon">
+                <option value="🛁">🛁 Salle de bain / ménage</option>
+                <option value="🥐">🥐 Petit déjeuner / cuisine</option>
+                <option value="🍽️">🍽️ Restaurant / sortie</option>
+                <option value="💆">💆 Massage / détente</option>
+                <option value="🎲">🎲 Soirée fun / jeux</option>
+                <option value="📺">📺 Séries / film</option>
+                <option value="👶">👶 Garde enfants</option>
+                <option value="🌹">🌹 Geste romantique</option>
+                <option value="🎉">🎉 Fête / anniversaire</option>
+                <option value="🚗">🚗 Sortie / balade</option>
+                <option value="💗">💗 Autre</option>
+              </select>
+            </label>
+
+            <label>
+              Prix proposé (en crédits ❤️)
+              <input 
+                type="number" 
+                name="offeredPrice" 
+                min="0" 
+                step="1" 
+                value="30"
+                onchange="updateSuperServicePrice(this)"
+                required
+              />
+            </label>
+
+            <!-- NEW: Super service option -->
+            <label class="checkbox-label">
+              <input type="checkbox" name="isSuperService" value="true" onchange="updateSuperServicePrice(document.querySelector('input[name=offeredPrice]'))" />
+              <span class="checkbox-custom"></span>
+              Service bonus (+30% de crédits pour ton partenaire)
+            </label>
+            <div id="superServiceInfo" style="margin: 10px 0; padding: 10px; background: #f0f8ff; border-radius: 4px; display: none;">
+              <p style="margin: 0; color: #2c5aa0; font-weight: bold;" id="superServiceText"></p>
+            </div>
+
+            <p class="hint">
+              Ton solde actuel : <strong><%= user.credits %> ❤️</strong><br>
+              Les crédits ne seront débités que si ton/ta partenaire accepte.
+            </p>
+
+            <button type="submit" class="btn-primary">Envoyer la demande</button>
+            <a href="/dashboard" class="btn-secondary">Annuler</a>
+          </form>
+          <script>
+            function updateSuperServicePrice(priceInput) {
+              const checkbox = document.querySelector('input[name=isSuperService]');
+              const infoDiv = document.getElementById('superServiceInfo');
+              const superServiceText = document.getElementById('superServiceText');
+              
+              if (checkbox.checked) {
+                const basePrice = parseInt(priceInput.value) || 0;
+                const bonus = Math.round(basePrice * 0.3);
+                const total = basePrice + bonus;
+                
+                superServiceText.textContent = `Service bonus : Ton partenaire recevra ${basePrice} ❤️ (prix) + ${bonus} ❤️ (bonus) = ${total} ❤️ au total !`;
+                infoDiv.style.display = 'block';
+              } else {
+                infoDiv.style.display = 'none';
+              }
+            }
+          </script>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

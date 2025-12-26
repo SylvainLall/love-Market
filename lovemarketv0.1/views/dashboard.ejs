@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Tableau de bord - Love Market</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="logo">💕 Love Market</div>
+      <% if (user) { %>
+      <nav class="nav">
+        <a href="/dashboard" title="Dashboard" class="<%= currentPath === '/dashboard' ? 'nav-active' : '' %>">🏠<span class="nav-text"> Accueil</span></a>
+        <a href="/shop" title="Boutique" class="<%= currentPath === '/shop' ? 'nav-active' : '' %>">🛍️<span class="nav-text"> Boutique</span></a>
+        <a href="/my-services" title="Mes services" class="<%= currentPath === '/my-services' ? 'nav-active' : '' %>">🤝<span class="nav-text"> Mes services</span></a>
+        <a href="/special-events" title="Événements spéciaux" class="<%= currentPath === '/special-events' ? 'nav-active' : '' %>">🎯<span class="nav-text"> Événements</span></a>
+        <a href="/negotiations" title="Négociations" class="nav-link-with-badge <%= currentPath === '/negotiations' ? 'nav-active' : '' %>">
+          💬<span class="nav-text"> Négociations</span>
+          <% if (notificationCount > 0) { %>
+          <span class="notification-badge"><%= notificationCount %></span>
+          <% } %>
+        </a>
+        <% if (user.role === 'admin') { %>
+        <a href="/admin" class="admin-link <%= currentPath === '/admin' ? 'nav-active' : '' %>" title="Admin">⚙️<span class="nav-text"> Admin</span></a>
+        <% } %>
+      </nav>
+      <div class="user-info">
+        <span class="credits"><%= user.credits %> ❤️</span>
+        <span class="user-name"><%= user.displayName %></span>
+        <a href="/logout" class="logout">Déconnexion</a>
+      </div>
+      <% } %>
+    </header>
+
+    <main class="page">
+      <!-- NEW: Highlight purchases of MY services -->
+      <% if (myServicesPurchases && myServicesPurchases.length > 0) { %>
+      <div class="alert alert-success" style="border-left: 5px solid #4CAF50;">
+        <h2 style="margin-top: 0;">🎉 Nouvelles demandes d'achat de tes services !</h2>
+        <% myServicesPurchases.forEach(function(purchase) { %>
+        <div class="purchase-notification">
+          <p style="font-size: 1.1rem; margin: 8px 0;">
+            <strong><%= purchase.buyer.displayName %></strong> a acheté :
+            <strong><%= purchase.service.icon %> <%= purchase.service.title %></strong>
+            pour <strong><%= purchase.offeredPrice %> ❤️</strong>
+          </p>
+          <p style="color: #666; margin: 4px 0;">
+            ⚠️ Les crédits ont déjà été débités de <%= purchase.buyer.displayName %>.
+          </p>
+          <form method="post" action="/offers/<%= purchase.id %>/respond" style="margin-top: 8px;">
+            <button type="submit" name="action" value="accept" class="btn-primary">
+              ✅ Accepter et recevoir <%= purchase.offeredPrice %> ❤️
+            </button>
+            <button type="submit" name="action" value="reject" class="btn-secondary" style="margin-left: 8px;">
+              ❌ Refuser (remboursement automatique)
+            </button>
+          </form>
+        </div>
+        <% }) %>
+      </div>
+      <% } %>
+
+      <!-- NEW: Highlight custom service requests -->
+      <% if (myServicesRequests && myServicesRequests.length > 0) { %>
+      <div class="alert alert-info" style="border-left: 5px solid #2196F3;">
+        <h2 style="margin-top: 0;">✨ Nouvelles demandes personnalisées !</h2>
+        <p style="color: #1976D2; font-weight: bold; margin: 8px 0;">📥 On te demande de faire quelque chose</p>
+        <% myServicesRequests.forEach(function(request) { %>
+        <div class="purchase-notification">
+          <p style="font-size: 1.1rem; margin: 8px 0;">
+            <strong><%= request.buyer.displayName %></strong> demande :
+            <strong><%= request.serviceIcon %> <%= request.serviceTitle %></strong>
+            pour <strong><%= request.offeredPrice %> ❤️</strong>
+          </p>
+          <% if (request.comment) { %>
+          <p class="comment" style="margin: 4px 0;">« <%= request.comment %> »</p>
+          <% } %>
+          <form method="post" action="/offers/<%= request.id %>/respond" style="margin-top: 8px;">
+            <button type="submit" name="action" value="accept" class="btn-primary">
+              ✅ Accepter et recevoir <%= request.offeredPrice %> ❤️
+            </button>
+            <button type="submit" name="action" value="reject" class="btn-secondary" style="margin-left: 8px;">
+              ❌ Refuser
+            </button>
+            <a href="/negotiations" class="btn-secondary" style="margin-left: 8px;">
+              🔄 Faire une contre-proposition
+            </a>
+          </form>
+        </div>
+        <% }) %>
+      </div>
+      <% } %>
+
+      <section class="grid">
+        <!-- NEW: Relationship Level Card -->
+        <div class="card" style="grid-column: span 2; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+          <h2 class="card-title" style="color: white;">
+            <%= relationshipData.level.icon %> Niveau de couple : <%= relationshipData.level.name %>
+          </h2>
+          <p style="font-size: 1.2rem; margin: 10px 0;">
+            <strong><%= relationshipData.totalCredits %> crédits</strong> échangés sur les 30 derniers jours
+          </p>
+          <% if (relationshipData.nextLevel) { %>
+          <div style="background: rgba(255,255,255,0.2); padding: 10px; border-radius: 4px; margin-top: 10px;">
+            <p style="margin: 0; font-size: 0.9rem;">
+              Prochain niveau : <strong><%= relationshipData.nextLevel.icon %> <%= relationshipData.nextLevel.name %></strong>
+            </p>
+            <p style="margin: 5px 0 0 0; font-size: 0.9rem;">
+              Encore <strong><%= relationshipData.nextLevel.minCredits - relationshipData.totalCredits %> crédits</strong> à échanger
+            </p>
+          </div>
+          <% } else { %>
+          <p style="margin-top: 10px; font-size: 0.9rem;">
+            🎉 Niveau maximum atteint !
+          </p>
+          <% } %>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">Bonjour <%= user.displayName %> 💕</h2>
+          <p>Tu as <strong><%= user.credits %> ❤️ crédits</strong>.</p>
+          <% if (partner) { %>
+          <p>Ton/ta partenaire : <strong><%= partner.displayName %></strong></p>
+          <p>
+            Crédits de ton/ta partenaire :
+            <strong><%= partner.credits %> ❤️</strong>
+          </p>
+          <% } %>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">Votre univers</h3>
+          <ul class="list">
+            <li>Services que tu proposes : <strong><%= myServicesCount %></strong></li>
+            <li>Services que ton partenaire propose : <strong><%= partnerServicesCount %></strong></li>
+          </ul>
+          <a class="btn-secondary" href="/shop">Voir la boutique de ton partenaire</a>
+          <a class="btn-primary" href="/request-service" style="margin-left: 8px;">✨ Demander un service</a>
+          <a class="btn-primary" href="/offer-service" style="margin-left: 8px;">💡 Proposer un service</a>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">Offres en attente</h3>
+          <% if (!pendingOffers.length) { %>
+          <p>Aucune offre en attente. Tu peux créer un service ou en acheter un !</p>
+          <% } else { %>
+          <ul class="list offers">
+            <% pendingOffers.forEach(function(o) { %>
+            <li>
+              Offre n°<%= o.id %> – proposition de <strong><%= o.offeredPrice %> ❤️</strong>
+              pour le service <strong>#<%= o.serviceId %></strong>
+            </li>
+            <% }) %>
+          </ul>
+          <a href="/negotiations" class="btn-secondary">Voir les négociations</a>
+          <% } %>
+        </div>
+
+        <!-- NEW: Credit Donation Section -->
+        <div class="card">
+          <h3 class="card-title">💝 Faire un don de crédits</h3>
+          <p>Offrir des crédits à <strong><%= partner.displayName %></strong> (il/elle a actuellement <strong><%= partner.credits %> ❤️</strong>)</p>
+          <form method="post" action="/donate-credits" class="form">
+            <label>
+              Montant à offrir
+              <input 
+                type="number" 
+                name="amount" 
+                min="1" 
+                max="<%= user.credits %>" 
+                placeholder="Ex: 20" 
+                required 
+              />
+            </label>
+            <label>
+              Message (optionnel)
+              <textarea 
+                name="message" 
+                rows="2" 
+                placeholder="Un petit mot d'accompagnement...">
+              </textarea>
+            </label>
+            <button type="submit" class="btn-primary">Faire le don</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- NEW: Gift Voucher Redemption -->
+      <section class="section" id="voucher-section">
+        <div class="card">
+          <h2 class="card-title">🎁 Utiliser un bon cadeau</h2>
+          <% if (typeof error !== 'undefined' && error) { %>
+          <div class="error"><%= error %></div>
+          <% } %>
+          <% if (typeof success !== 'undefined' && success) { %>
+          <div class="alert alert-success">
+            <p style="margin: 0;"><%= success %></p>
+          </div>
+          <% } %>
+          <form method="post" action="/redeem-voucher" class="form">
+            <label>
+              Code du bon cadeau (4 chiffres)
+              <input 
+                type="text" 
+                name="code" 
+                placeholder="1234" 
+                pattern="\d{4}" 
+                title="Entrez exactement 4 chiffres"
+                required 
+              />
+            </label>
+            <button type="submit" class="btn-primary">Valider le code</button>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer style="height: 100px; display: flex; justify-content: center; align-items: center;">
+      <!-- NEW: Gift Icon at bottom of page, needs scrolling to see -->
+      <div class="gift-icon-container">
+        <a href="#voucher-section" title="Bons cadeaux" style="display: block;">
+          <span style="font-size: 2rem;">🎁</span>
+        </a>
+      </div>
+    </footer>
+
+    <script>
+      // NEW: Animation for successful voucher redemption
+      <% if (typeof success !== 'undefined' && success) { %>
+      document.addEventListener('DOMContentLoaded', function() {
+        const successAlert = document.querySelector('.alert-success');
+        if (successAlert) {
+          successAlert.style.animation = 'pulse 2s infinite';
+          
+          // Add floating hearts animation
+          const hearts = ['💖', '💕', '💗', '💝'];
+          for (let i = 0; i < 10; i++) {
+            const heart = document.createElement('div');
+            heart.innerHTML = hearts[Math.floor(Math.random() * hearts.length)];
+            heart.style.position = 'fixed';
+            heart.style.fontSize = '2rem';
+            heart.style.left = Math.random() * 100 + 'vw';
+            heart.style.top = '100vh';
+            heart.style.zIndex = '1000';
+            heart.style.userSelect = 'none';
+            document.body.appendChild(heart);
+            
+            // Animate the heart floating up
+            const animation = heart.animate([
+              { transform: 'translateY(0)', opacity: 1 },
+              { transform: 'translateY(-100vh)', opacity: 0 }
+            ], {
+              duration: Math.random() * 3000 + 2000,
+              easing: 'ease-out'
+            });
+            
+            animation.onfinish = () => heart.remove();
+          }
+        }
+      });
+      <% } %>
+    </script>
+  </body>
+</html>

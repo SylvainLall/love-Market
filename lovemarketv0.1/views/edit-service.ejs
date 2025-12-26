@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Modifier un service - Love Market</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="logo">💕 Love Market</div>
+      <% if (user) { %>
+      <nav class="nav">
+        <a href="/dashboard" title="Dashboard" class="<%= currentPath === '/dashboard' ? 'nav-active' : '' %>">🏠<span class="nav-text"> Accueil</span></a>
+        <a href="/shop" title="Boutique" class="<%= currentPath === '/shop' ? 'nav-active' : '' %>">🛍️<span class="nav-text"> Boutique</span></a>
+        <a href="/my-services" title="Mes services" class="<%= currentPath === '/my-services' ? 'nav-active' : '' %>">🤝<span class="nav-text"> Mes services</span></a>
+        <a href="/negotiations" title="Négociations" class="nav-link-with-badge <%= currentPath === '/negotiations' ? 'nav-active' : '' %>">
+          💬<span class="nav-text"> Négociations</span>
+          <% if (notificationCount > 0) { %>
+          <span class="notification-badge"><%= notificationCount %></span>
+          <% } %>
+        </a>
+        <% if (user.role === 'admin') { %>
+        <a href="/admin" class="admin-link <%= currentPath === '/admin' ? 'nav-active' : '' %>" title="Admin">⚙️<span class="nav-text"> Admin</span></a>
+        <% } %>
+      </nav>
+      <div class="user-info">
+        <span class="credits"><%= user.credits %> ❤️</span>
+        <span class="user-name"><%= user.displayName %></span>
+        <a href="/logout" class="logout">Déconnexion</a>
+      </div>
+      <% } %>
+    </header>
+
+    <main class="page">
+      <section class="section">
+        <h1 class="section-title">Modifier le service</h1>
+
+        <div class="card">
+          <form method="post" action="/services/<%= service.id %>/edit" class="form">
+            <label>
+              Titre
+              <input type="text" name="title" value="<%= service.title %>" required />
+            </label>
+            <label>
+              Description
+              <textarea name="description" rows="2"><%= service.description %></textarea>
+            </label>
+            <label>
+              Catégorie
+              <select name="category">
+                <option value="Romantique" <%= service.category === 'Romantique' ? 'selected' : '' %>>Romantique</option>
+                <option value="Détente" <%= service.category === 'Détente' ? 'selected' : '' %>>Détente</option>
+                <option value="Fun" <%= service.category === 'Fun' ? 'selected' : '' %>>Fun</option>
+                <option value="Maison" <%= service.category === 'Maison' ? 'selected' : '' %>>Maison</option>
+                <option value="Sortie" <%= service.category === 'Sortie' ? 'selected' : '' %>>Sortie</option>
+                <option value="Famille" <%= service.category === 'Famille' ? 'selected' : '' %>>Famille</option>
+                <option value="Enfants" <%= service.category === 'Enfants' ? 'selected' : '' %>>Enfants</option>
+                <option value="Cuisine" <%= service.category === 'Cuisine' ? 'selected' : '' %>>Cuisine</option>
+                <option value="Voyage" <%= service.category === 'Voyage' ? 'selected' : '' %>>Voyage</option>
+                <option value="Bien-être" <%= service.category === 'Bien-être' ? 'selected' : '' %>>Bien-être</option>
+              </select>
+            </label>
+            <label>
+              Icône
+              <select name="icon">
+                <option value="🛁" <%= service.icon === '🛁' ? 'selected' : '' %>>🛁 Salle de bain / ménage</option>
+                <option value="🥐" <%= service.icon === '🥐' ? 'selected' : '' %>>🥐 Petit déjeuner / cuisine</option>
+                <option value="🍽️" <%= service.icon === '🍽️' ? 'selected' : '' %>>🍽️ Restaurant / sortie</option>
+                <option value="💆" <%= service.icon === '💆' ? 'selected' : '' %>>💆 Massage / détente</option>
+                <option value="🎲" <%= service.icon === '🎲' ? 'selected' : '' %>>🎲 Soirée fun / jeux</option>
+                <option value="📺" <%= service.icon === '📺' ? 'selected' : '' %>>📺 Séries / film</option>
+                <option value="👶" <%= service.icon === '👶' ? 'selected' : '' %>>👶 Garde enfants</option>
+                <option value="🌹" <%= service.icon === '🌹' ? 'selected' : '' %>>🌹 Geste romantique</option>
+                <option value="🎉" <%= service.icon === '🎉' ? 'selected' : '' %>>🎉 Fête / anniversaire</option>
+                <option value="🚗" <%= service.icon === '🚗' ? 'selected' : '' %>>🚗 Sortie / balade</option>
+                <option value="💗" <%= !service.icon || service.icon === '💗' ? 'selected' : '' %>>💗 Autre</option>
+              </select>
+            </label>
+            <label>
+              Prix (en crédits ❤️)
+              <input type="number" name="price" min="0" step="1" value="<%= service.price %>" />
+            </label>
+            <button type="submit" class="btn-primary">Enregistrer</button>
+            <a href="/my-services" class="btn-secondary">Annuler</a>
+          </form>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
