@@ -1048,7 +1048,8 @@ app.post('/admin/credits', requireAdmin, (req, res) => {
   res.redirect('/admin');
 });
 
-app.listen(PORT, () => {
-  console.log(`Love market app listening on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Love market app listening on http://0.0.0.0:${PORT}`);
   console.log('[DEBUG] Route /services/:id/edit is registered.');
 });
+
