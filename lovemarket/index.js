@@ -1,86 +1,140 @@
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const DATA_FILE = path.join(__dirname, 'data.json');
 
-// --- In-memory data ---
-const users = [
-  { id: 'Alice', password: '171088', role: 'user', displayName: 'Alice', credits: 120 },
-  { id: 'Sylvain', password: '31051989', role: 'admin', displayName: 'Sylvain', credits: 120 },
-];
+// --- Default data ---
+const defaultData = {
+  users: [
+    { id: 'Alice', password: '171088', role: 'user', displayName: 'Alice', credits: 120 },
+    { id: 'Sylvain', password: '31051989', role: 'admin', displayName: 'Sylvain', credits: 120 },
+  ],
+  services: [
+    {
+      id: '1',
+      sellerId: 'Sylvain',
+      title: 'Nettoyage de la salle de bain',
+      description: 'Salle de bain propre, miroir et lavabo nickels, sol lavé.',
+      category: 'Maison',
+      price: 25,
+      icon: '🛁',
+    },
+    {
+      id: '2',
+      sellerId: 'Sylvain',
+      title: 'Petit déjeuner au lit',
+      description: 'Café ou thé, jus, viennoiserie et câlin du matin.',
+      category: 'Romantique',
+      price: 30,
+      icon: '🥐',
+    },
+    {
+      id: '3',
+      sellerId: 'Sylvain',
+      title: 'Soirée resto sans les enfants',
+      description: 'Je m\'occupe de tout : réservation, garde des enfants, transport.',
+      category: 'Sortie',
+      price: 60,
+      icon: '🍽️',
+    },
+    {
+      id: '4',
+      sellerId: 'Alice',
+      title: 'Soirée série et plaid',
+      description: 'Choix de la série, grignotage préparé, ambiance cosy sous le plaid.',
+      category: 'Détente',
+      price: 35,
+      icon: '📺',
+    },
+    {
+      id: '5',
+      sellerId: 'Alice',
+      title: 'Massage 30 minutes',
+      description: 'Massage dos / nuque avec musique douce.',
+      category: 'Détente',
+      price: 40,
+      icon: '💆',
+    },
+    {
+      id: '6',
+      sellerId: 'Alice',
+      title: 'Garde des enfants pour ta soirée',
+      description: 'Je m\'occupe des enfants pendant que tu profites de ta soirée.',
+      category: 'Maison',
+      price: 50,
+      icon: '👶',
+    },
+  ],
+  offers: [],
+  giftVouchers: [],
+  specialEvents: [],
+  relationshipLevels: [
+    { name: 'Coloc', minCredits: 0, icon: '🏠' },
+    { name: 'Complice', minCredits: 100, icon: '🤝' },
+    { name: 'Équipe', minCredits: 300, icon: '⚡' },
+    { name: 'Connecté', minCredits: 600, icon: '💫' },
+    { name: 'In Love', minCredits: 1000, icon: '💕' },
+  ],
+  nextServiceId: 7,
+  nextOfferId: 1,
+  nextVoucherId: 1,
+  nextEventId: 1,
+};
 
-let services = [
-  {
-    id: '1',
-    sellerId: 'Sylvain',
-    title: 'Nettoyage de la salle de bain',
-    description: 'Salle de bain propre, miroir et lavabo nickels, sol lavé.',
-    category: 'Maison',
-    price: 25,
-    icon: '🛁',
-  },
-  {
-    id: '2',
-    sellerId: 'Sylvain',
-    title: 'Petit déjeuner au lit',
-    description: 'Café ou thé, jus, viennoiserie et câlin du matin.',
-    category: 'Romantique',
-    price: 30,
-    icon: '🥐',
-  },
-  {
-    id: '3',
-    sellerId: 'Sylvain',
-    title: 'Soirée resto sans les enfants',
-    description: 'Je m’occupe de tout : réservation, garde des enfants, transport.',
-    category: 'Sortie',
-    price: 60,
-    icon: '🍽️',
-  },
-  {
-    id: '4',
-    sellerId: 'Alice',
-    title: 'Soirée série et plaid',
-    description: 'Choix de la série, grignotage préparé, ambiance cosy sous le plaid.',
-    category: 'Détente',
-    price: 35,
-    icon: '📺',
-  },
-  {
-    id: '5',
-    sellerId: 'Alice',
-    title: 'Massage 30 minutes',
-    description: 'Massage dos / nuque avec musique douce.',
-    category: 'Détente',
-    price: 40,
-    icon: '💆',
-  },
-  {
-    id: '6',
-    sellerId: 'Alice',
-    title: 'Garde des enfants pour ta soirée',
-    description: 'Je m’occupe des enfants pendant que tu profites de ta soirée.',
-    category: 'Maison',
-    price: 50,
-    icon: '👶',
-  },
-];
-let offers = [];
-let giftVouchers = [];
-let specialEvents = [];
-let relationshipLevels = [
-  { name: 'Coloc', minCredits: 0, icon: '🏠' },
-  { name: 'Complice', minCredits: 100, icon: '🤝' },
-  { name: 'Équipe', minCredits: 300, icon: '⚡' },
-  { name: 'Connecté', minCredits: 600, icon: '💫' },
-  { name: 'In Love', minCredits: 1000, icon: '💕' },
-];
-let nextServiceId = 7;
-let nextOfferId = 1;
-let nextVoucherId = 1;
-let nextEventId = 1;
+// --- Load data from file or use defaults ---
+function loadData() {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const fileData = fs.readFileSync(DATA_FILE, 'utf8');
+      const data = JSON.parse(fileData);
+      console.log('✅ Données chargées depuis data.json');
+      return data;
+    }
+  } catch (error) {
+    console.error('❌ Erreur lors du chargement des données:', error);
+  }
+  console.log('📝 Utilisation des données par défaut');
+  return defaultData;
+}
+
+// --- Save data to file ---
+function saveData() {
+  try {
+    const data = {
+      users,
+      services,
+      offers,
+      giftVouchers,
+      specialEvents,
+      relationshipLevels,
+      nextServiceId,
+      nextOfferId,
+      nextVoucherId,
+      nextEventId,
+    };
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+    console.log('💾 Données sauvegardées');
+  } catch (error) {
+    console.error('❌ Erreur lors de la sauvegarde:', error);
+  }
+}
+
+// --- Initialize data ---
+const loadedData = loadData();
+const users = loadedData.users;
+let services = loadedData.services;
+let offers = loadedData.offers;
+let giftVouchers = loadedData.giftVouchers;
+let specialEvents = loadedData.specialEvents;
+let relationshipLevels = loadedData.relationshipLevels;
+let nextServiceId = loadedData.nextServiceId;
+let nextOfferId = loadedData.nextOfferId;
+let nextVoucherId = loadedData.nextVoucherId;
+let nextEventId = loadedData.nextEventId;
 
 // --- App setup ---
 app.set('view engine', 'ejs');
@@ -354,6 +408,7 @@ app.post('/services', requireAuth, (req, res) => {
     icon: icon || '💗',
   });
 
+  saveData();
   res.redirect('/my-services');
 });
 
@@ -386,6 +441,7 @@ app.post('/services/:id/edit', requireAuth, (req, res) => {
   service.price = Number(price) || 0;
   service.icon = icon || service.icon || '💗';
 
+  saveData();
   res.redirect('/my-services');
 });
 
@@ -395,6 +451,7 @@ app.post('/services/:id/delete', requireAuth, (req, res) => {
   if (index === -1) return res.redirect('/my-services');
 
   services.splice(index, 1);
+  saveData();
   res.redirect('/my-services');
 });
 
@@ -426,6 +483,7 @@ app.post('/services/:id/buy', requireAuth, (req, res) => {
     debitedAmount: service.price, // Track debited amount for refund
   });
 
+  saveData();
   res.redirect('/dashboard');
 });
 
@@ -448,6 +506,7 @@ app.post('/services/:id/offer', requireAuth, (req, res) => {
     type: 'negotiation', // NEW: distinguish from purchase
   });
 
+  saveData();
   res.redirect('/dashboard');
 });
 
@@ -529,6 +588,7 @@ app.post('/request-service', requireAuth, (req, res) => {
     superServiceBonus: bonusCredits,
   });
 
+  saveData();
   res.redirect('/negotiations');
 });
 
@@ -577,6 +637,7 @@ app.post('/offer-service', requireAuth, (req, res) => {
     superServiceBonus: bonusCredits,
   });
 
+  saveData();
   res.redirect('/negotiations');
 });
 
@@ -677,6 +738,7 @@ app.post('/offers/:id/respond', requireAuth, (req, res) => {
     offer.readBy = [user.id]; // Only the one who rejected has read it
   }
 
+  saveData();
   res.redirect('/negotiations');
 });
 
@@ -711,6 +773,7 @@ app.post('/offers/:id/realize', requireAuth, (req, res) => {
     offer.feedbackAt = new Date().toISOString();
   }
 
+  saveData();
   res.redirect('/negotiations');
 });
 
@@ -750,6 +813,7 @@ app.post('/donate-credits', requireAuth, (req, res) => {
   
   offers.push(donation);
   
+  saveData();
   req.session.success = `Don de ${amountNum} ❤️ crédits effectué à ${partner.displayName} !`;
   res.redirect('/dashboard');
 });
@@ -775,6 +839,7 @@ app.post('/admin/relationship-levels', requireAdmin, (req, res) => {
   
   if (index >= 0 && index < relationshipLevels.length && credits >= 0) {
     relationshipLevels[index].minCredits = credits;
+    saveData();
   }
   
   res.redirect('/admin');
@@ -805,6 +870,7 @@ app.post('/admin/special-event', requireAdmin, (req, res) => {
   
   specialEvents.push(event);
   
+  saveData();
   res.redirect('/admin');
 });
 
@@ -871,6 +937,7 @@ app.post('/special-events/:id/accept', requireAuth, (req, res) => {
   
   offers.push(offer);
   
+  saveData();
   req.session.success = `Vous avez accepté l'événement: ${event.title}`;
   res.redirect('/special-events');
 });
@@ -898,6 +965,7 @@ app.post('/special-events/:id/complete', requireAuth, (req, res) => {
   // Update the offer status
   offer.status = 'realized';
   
+  saveData();
   req.session.success = `Félicitations ! Vous avez reçu ${event.credits} ❤️ crédits pour avoir complété l'événement: ${event.title}`;
   res.redirect('/special-events');
 });
@@ -932,6 +1000,7 @@ app.post('/admin/gift-voucher', requireAdmin, (req, res) => {
   
   giftVouchers.push(voucher);
   
+  saveData();
   res.redirect('/admin');
 });
 
@@ -964,6 +1033,7 @@ app.post('/redeem-voucher', requireAuth, (req, res) => {
   voucher.usedBy = user.id;
   voucher.usedAt = new Date().toISOString();
   
+  saveData();
   req.session.success = `Félicitations ! Vous avez reçu ${voucher.credits} ❤️ crédits !`;
   res.redirect('/dashboard');
 });
@@ -973,6 +1043,7 @@ app.post('/admin/credits', requireAdmin, (req, res) => {
   const target = users.find((u) => u.id === targetId);
   if (target && !Number.isNaN(Number(credits))) {
     target.credits = Number(credits);
+    saveData();
   }
   res.redirect('/admin');
 });
