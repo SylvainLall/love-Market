@@ -267,6 +267,8 @@ button { font-family: inherit; }
 
 /* --- Formulaires --- */
 .form label { display: block; font-size: .9rem; margin-bottom: 12px; color: var(--gris); }
+.form-block { display: block; font-size: .9rem; margin-bottom: 12px; color: var(--gris); }
+.label-text { display: block; }
 input, textarea, select {
   width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--ligne);
   margin-top: 4px; font-family: inherit; font-size: 1rem; background: #fff; color: var(--texte);

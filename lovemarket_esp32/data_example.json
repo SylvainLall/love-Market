@@ -1,0 +1,101 @@
+{
+  "users": [
+    {
+      "id": "Alice",
+      "passwordHash": "0123456789abcdef0123456789abcdef$cfed238215f6d877514bca820b54d4ada7a520e273a1e691c66d05f6df5fa15e",
+      "role": "user",
+      "displayName": "Alice",
+      "credits": 120
+    },
+    {
+      "id": "Sylvain",
+      "passwordHash": "0123456789abcdef0123456789abcdef$36ba5f9e3f4ab6d4043d4915a140ce8cf7c8068241cafb91584b3ce34ed8c2d2",
+      "role": "admin",
+      "displayName": "Sylvain",
+      "credits": 120
+    }
+  ],
+  "wishes": [
+    {
+      "id": "1",
+      "userId": "Sylvain",
+      "title": "Une soirée romantique organisée par toi",
+      "description": "Repas aux chandelles, playlist douce, téléphones en mode avion.",
+      "category": "Romantisme",
+      "credits": 4,
+      "desiredDate": "dès que possible",
+      "status": "open",
+      "createdAt": "2026-11-23T19:00:00.000Z",
+      "readBy": []
+    },
+    {
+      "id": "2",
+      "userId": "Alice",
+      "title": "Un week-end amoureux",
+      "description": "Deux jours loin de tout, sans logistique à gérer.",
+      "category": "Moments à deux",
+      "credits": 3,
+      "desiredDate": "un week-end de décembre",
+      "status": "open",
+      "createdAt": "2026-11-23T19:05:00.000Z",
+      "readBy": []
+    },
+    {
+      "id": "3",
+      "userId": "Alice",
+      "title": "Une soirée série et plaid",
+      "description": "Choix de la série, grignotage préparé, ambiance cosy.",
+      "category": "Détente et évasion",
+      "credits": 0,
+      "status": "completed",
+      "acceptedBy": "Sylvain",
+      "createdAt": "2026-11-20T18:00:00.000Z",
+      "acceptedAt": "2026-11-20T18:30:00.000Z",
+      "realizationReportedAt": "2026-11-21T22:10:00.000Z",
+      "completedAt": "2026-11-21T22:30:00.000Z",
+      "memoryComment": "Première soirée de notre album 💕",
+      "readBy": []
+    }
+  ],
+  "creditTransactions": [
+    {
+      "id": "1",
+      "userId": "Sylvain",
+      "amount": 0,
+      "type": "wish_completed",
+      "wishId": "3",
+      "description": "Envie réalisée : Une soirée série et plaid",
+      "createdAt": "2026-11-21T22:30:00.000Z"
+    }
+  ],
+  "notifications": [
+    {
+      "id": "1",
+      "userId": "Alice",
+      "type": "realization_confirmed",
+      "wishId": "3",
+      "message": "Sylvain a confirmé la réalisation de « Une soirée série et plaid » — merci !",
+      "createdAt": "2026-11-21T22:30:00.000Z",
+      "readAt": "2026-11-21T22:31:00.000Z"
+    }
+  ],
+  "categories": [
+    { "name": "Romantisme", "icon": "💞" },
+    { "name": "Moments à deux", "icon": "🥂" },
+    { "name": "Surprises et sorties", "icon": "🎁" },
+    { "name": "Détente et évasion", "icon": "🌿" },
+    { "name": "Intimité et complicité", "icon": "🔥" },
+    { "name": "Loisirs et passions", "icon": "🎨" }
+  ],
+  "relationshipLevels": [
+    { "name": "Coloc", "threshold": 0, "icon": "🏠" },
+    { "name": "Complice", "threshold": 5, "icon": "🤝" },
+    { "name": "Équipe", "threshold": 12, "icon": "⚡" },
+    { "name": "Connecté", "threshold": 20, "icon": "💫" },
+    { "name": "In Love", "threshold": 35, "icon": "💕" }
+  ],
+  "nextWishId": 4,
+  "nextTransactionId": 2,
+  "nextNotificationId": 2,
+  "schemaVersion": 1
+}

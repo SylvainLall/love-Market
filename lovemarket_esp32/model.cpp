@@ -300,7 +300,7 @@ static void migrateV0(const String& raw, JsonDocument& doc) {
   Serial.println("[DATA] Format V0 detecte : migration vers V1");
 
   File b = LittleFS.open(V0_BACKUP_FILE, "w");
-  if (b) { b.print(raw); b.close(); Serial.println("[DATA] Sauvegarde brute : " V0_BACKUP_FILE); }
+  if (b) { b.print(raw); b.close(); Serial.println(String("[DATA] Sauvegarde brute : ") + V0_BACKUP_FILE); }
 
   JsonDocument legacy;
   JsonObject lo = legacy.to<JsonObject>();
@@ -311,7 +311,7 @@ static void migrateV0(const String& raw, JsonDocument& doc) {
   if (doc["specialEvents"].is<JsonArray>())     lo["specialEvents"].set(doc["specialEvents"]);
   if (doc["relationshipLevels"].is<JsonArray>()) lo["relationshipLevels"].set(doc["relationshipLevels"]);
   File lf = LittleFS.open(LEGACY_FILE, "w");
-  if (lf) { serializeJson(legacy, lf); lf.close(); Serial.println("[DATA] Archive commerciale : " LEGACY_FILE); }
+  if (lf) { serializeJson(legacy, lf); lf.close(); Serial.println(String("[DATA] Archive commerciale : ") + LEGACY_FILE); }
 
   // Store par défaut V1, puis conservation des utilisateurs/soldes
   loadDefaultStore();

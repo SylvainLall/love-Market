@@ -278,8 +278,8 @@ String pageWishForm(User& user, Wish* wish) {
   bool isEdit = (wish != nullptr);
   String action = isEdit ? "/wishes/" + wish->id + "/edit" : String("/wishes");
   int credits = isEdit ? wish->credits : 2;
-  const char* VALUES[5] = {"0 — gratuite", "1 — petite envie", "2 — envie simple",
-                           "3 — envie importante", "4 — grande envie"};
+  const char* VALUES[5] = {"gratuite", "petite envie", "envie simple",
+                           "envie importante", "grande envie"};
 
   String b;
   b.reserve(6000);
@@ -298,13 +298,13 @@ String pageWishForm(User& user, Wish* wish) {
        "</select></label>\n";
 
   // Valeur en crédits : la récompense que gagnera le réalisateur (0 à 4)
-  b += "<label>Valeur en crédits *<div class=\"credit-choices\">\n";
+  b += "<div class=\"form-block\"><span class=\"label-text\">Valeur en crédits *</span><div class=\"credit-choices\">\n";
   for (int i = 0; i <= 4; i++) {
     b += "<label><input type=\"radio\" name=\"credits\" value=\"" + String(i) + "\"" +
          (credits == i ? String(" checked") : String("")) + " /><span>♥ " + String(i) +
          " · " + VALUES[i] + "</span></label>\n";
   }
-  b += "</div></label>\n";
+  b += "</div></div>\n";
   b += "<label>Date ou période souhaitée<input type=\"text\" name=\"desiredDate\" "
        "placeholder=\"Ex : dès que possible, le week-end du 12...\" value=\"" +
        (isEdit ? esc(wish->desiredDate) : String("")) + "\" /></label>\n";
