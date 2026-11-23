@@ -4,21 +4,23 @@
 // ---------------------------------------------------------------------------
 // Helpers locaux
 // ---------------------------------------------------------------------------
-static String iconOr(const String& icon, const char* def) {
-  return icon.isEmpty() ? String(def) : icon;
+static String chipCategory(const Wish& w) {
+  return w.category.isEmpty() ? String("") : String("<span class=\"chip\">") + esc(w.category) + "</span>";
+}
+
+static String chipDate(const Wish& w) {
+  return w.desiredDate.isEmpty() ? String("") : String("<span class=\"chip\">🗓 " ) + esc(w.desiredDate) + "</span>";
 }
 
 // ---------------------------------------------------------------------------
-// GET /login — views/login.ejs
-// Sélection du profil par boutons (Alice / Sylvain) puis mot de passe
+// GET /login — choix du profil + mot de passe
 // ---------------------------------------------------------------------------
 String pageLogin(const String& error) {
   String body;
   body.reserve(3500);
-  body += "<header class=\"topbar\"><div class=\"logo\">💕 Love Market</div></header>\n";
   body += "<main class=\"page\">\n<section class=\"center-card\">\n<div class=\"card card-login\">\n";
-  body += "<h1 class=\"title\">Bienvenue sur Love Market</h1>\n";
-  body += "<p class=\"subtitle\">Choisis ton profil puis entre ton mot de passe 💕</p>\n";
+  body += "<h1 class=\"title\">Love Market</h1>\n";
+  body += "<p class=\"subtitle\" style=\"text-align:center;\">Tes envies. Mes envies. Nos plaisirs.</p>\n";
   if (!error.isEmpty()) {
     body += "<div class=\"error\">" + esc(error) + "</div>\n";
   }
@@ -26,412 +28,300 @@ String pageLogin(const String& error) {
   body += "<input type=\"hidden\" name=\"userId\" id=\"userId\" value=\"\" />\n";
   body += "<div class=\"user-select\">\n";
   body += "<button type=\"button\" class=\"user-btn\" onclick=\"pickUser('Alice', this)\">👩 Alice</button>\n";
-  body += "<button type=\"button\" class=\"user-btn\" onclick=\"pickUser('Sylvain', this)\">👨 Sylvain</button>\n";
+  body += "<button type=\"button\" class=\"user-btn\" onclick=\"pickUser('Sylvain', this)\">🧑 Sylvain</button>\n";
   body += "</div>\n";
   body += "<label>Mot de passe<input type=\"password\" name=\"password\" id=\"password\" placeholder=\"Ton mot de passe\" required /></label>\n";
-  body += "<button type=\"submit\" class=\"btn-primary\">Se connecter</button>\n</form>\n";
-  body += "<div class=\"hint\" style=\"margin-top: 20px;\"><p><em>Contacte ton partenaire pour obtenir ton mot de passe.</em></p></div>\n";
+  body += "<button type=\"submit\" class=\"btn-primary btn-full\">Se connecter</button>\n</form>\n";
   body += "</div>\n</section>\n</main>\n";
-  body += "<script>\n";
-  body += "function pickUser(id, btn){\n";
-  body += "  document.getElementById('userId').value = id;\n";
-  body += "  document.querySelectorAll('.user-btn').forEach(function(b){ b.classList.remove('selected'); });\n";
-  body += "  btn.classList.add('selected');\n";
-  body += "  document.getElementById('password').focus();\n";
-  body += "}\n";
-  body += "function checkForm(){\n";
-  body += "  if (!document.getElementById('userId').value) {\n";
-  body += "    alert(\"Choisis d'abord Alice ou Sylvain\");\n";
-  body += "    return false;\n";
-  body += "  }\n";
-  body += "  return true;\n";
-  body += "}\n";
-  body += "</script>\n";
+  body += R"JSEND(<script>
+function pickUser(id, btn){
+  document.getElementById('userId').value = id;
+  document.querySelectorAll('.user-btn').forEach(function(b){ b.classList.remove('selected'); });
+  btn.classList.add('selected');
+  document.getElementById('password').focus();
+}
+function checkForm(){
+  if (!document.getElementById('userId').value) {
+    alert("Choisis d'abord Alice ou Sylvain");
+    return false;
+  }
+  return true;
+}
+</script>
+)JSEND";
 
   String head = "<title>Connexion - Love Market</title>\n<link rel=\"stylesheet\" href=\"/style.css\"/>\n";
-  head += "<style>\n";
-  head += ".user-select{display:flex;gap:12px;margin-bottom:16px;}\n";
-  head += ".user-btn{flex:1;padding:16px 10px;font-size:1.05rem;font-weight:600;border:2px solid #e4d7e9;border-radius:14px;background:#fff;cursor:pointer;transition:border-color .2s, background .2s, box-shadow .2s;}\n";
-  head += ".user-btn:hover{border-color:#e91e63;}\n";
-  head += ".user-btn.selected{border-color:#e91e63;background:#fce4ec;box-shadow:0 2px 10px rgba(233,30,99,.25);}\n";
-  head += "</style>\n";
   return renderBarePage(head, body);
 }
 
 // ---------------------------------------------------------------------------
-// GET /dashboard — views/dashboard.ejs
+// GET /dashboard — accueil chaleureux (pas un tableau de bord administratif)
 // ---------------------------------------------------------------------------
-String pageDashboard(User& user, const String& error, const String& success) {
+String pageHome(User& user, const String& error, const String& success) {
   User* partner = findPartnerOf(user.id);
   RelData rel;
   getRelationshipData(rel);
-  int notif = countNotifications(user.id);
 
-  // Compteurs
-  int myServicesCount = 0, partnerServicesCount = 0;
-  for (auto& s : g_services) {
-    if (s.sellerId == user.id) myServicesCount++;
-    else if (partner && s.sellerId == partner->id) partnerServicesCount++;
+  // Dernières envies publiées par le partenaire (les plus récentes d'abord)
+  std::vector<Wish*> partnerOpen;
+  for (size_t i = g_wishes.size(); i > 0; i--) {
+    Wish& w = g_wishes[i - 1];
+    if (partner && w.userId == partner->id && w.status == "open") partnerOpen.push_back(&w);
   }
 
-  // Achats / demandes en attente me concernant + offres en attente
-  struct Enriched { Offer* o; Service* svc; User* buyer; };
-  std::vector<Enriched> purchases, requests;
-  std::vector<Offer*> pendingOffers;
-  for (auto& o : g_offers) {
-    if (o.toUserId != user.id || o.status != "pending") continue;
-    if (o.type == "purchase") {
-      Enriched e = {&o, o.serviceId.isEmpty() ? nullptr : findService(o.serviceId), findUser(o.fromUserId)};
-      purchases.push_back(e);
-    } else if (o.type == "request") {
-      Enriched e = {&o, nullptr, findUser(o.fromUserId)};
-      requests.push_back(e);
-    }
-    pendingOffers.push_back(&o);
+  // Engagements en cours me concernant (auteur ou réalisateur)
+  std::vector<Wish*> engagements;
+  for (size_t i = g_wishes.size(); i > 0; i--) {
+    Wish& w = g_wishes[i - 1];
+    if (w.status != "accepted") continue;
+    if (w.userId == user.id || w.acceptedBy == user.id) engagements.push_back(&w);
+  }
+
+  // Derniers moments réalisés
+  std::vector<Wish*> moments;
+  for (size_t i = g_wishes.size(); i > 0; i--) {
+    Wish& w = g_wishes[i - 1];
+    if (w.status == "completed") moments.push_back(&w);
+  }
+
+  // Message d'accueil contextuel, sans pression
+  String message;
+  if (!partnerOpen.empty()) {
+    message = String(partner ? partner->displayName : "Ton partenaire") + " a peut-être une envie à te faire découvrir.";
+  } else if (!engagements.empty()) {
+    message = "Un engagement est en cours — doucement, sans pression.";
+  } else if (!moments.empty()) {
+    message = "Un joli moment vient d'être réalisé !";
+  } else {
+    message = "Qu'est-ce qui te ferait plaisir en ce moment ?";
   }
 
   String b;
-  b.reserve(14000);
+  b.reserve(11000);
 
-  // Alertes : achats de mes services
-  if (!purchases.empty()) {
-    b += "<div class=\"alert alert-success\" style=\"border-left: 5px solid #4CAF50;\">\n";
-    b += "<h2 style=\"margin-top: 0;\">🎉 Nouvelles demandes d'achat de tes services !</h2>\n";
-    for (auto& e : purchases) {
-      b += "<div class=\"purchase-notification\">\n";
-      b += "<p style=\"font-size: 1.1rem; margin: 8px 0;\"><strong>" + esc(e.buyer ? e.buyer->displayName : "?") + "</strong> a acheté : <strong>"
-           + esc(e.svc ? iconOr(e.svc->icon, "💗") : String("💗")) + " "
-           + esc(e.svc ? e.svc->title : String("#") + e.o->serviceId) + "</strong> pour <strong>"
-           + String(e.o->offeredPrice) + " ❤️</strong></p>\n";
-      b += "<p style=\"color: #666; margin: 4px 0;\">⚠️ Les crédits ont déjà été débités de "
-           + esc(e.buyer ? e.buyer->displayName : "?") + ".</p>\n";
-      b += "<form method=\"post\" action=\"/offers/" + e.o->id + "/respond\" style=\"margin-top: 8px;\">\n";
-      b += "<button type=\"submit\" name=\"action\" value=\"accept\" class=\"btn-primary\">✅ Accepter et recevoir "
-           + String(e.o->offeredPrice) + " ❤️</button>\n";
-      b += "<button type=\"submit\" name=\"action\" value=\"reject\" class=\"btn-secondary\" style=\"margin-left: 8px;\">❌ Refuser (remboursement automatique)</button>\n";
-      b += "</form>\n</div>\n";
-    }
-    b += "</div>\n";
-  }
-
-  // Alertes : demandes personnalisées
-  if (!requests.empty()) {
-    b += "<div class=\"alert alert-info\" style=\"border-left: 5px solid #2196F3;\">\n";
-    b += "<h2 style=\"margin-top: 0;\">✨ Nouvelles demandes personnalisées !</h2>\n";
-    b += "<p style=\"color: #1976D2; font-weight: bold; margin: 8px 0;\">📥 On te demande de faire quelque chose</p>\n";
-    for (auto& e : requests) {
-      b += "<div class=\"purchase-notification\">\n";
-      b += "<p style=\"font-size: 1.1rem; margin: 8px 0;\"><strong>" + esc(e.buyer ? e.buyer->displayName : "?") + "</strong> demande : <strong>"
-           + esc(iconOr(e.o->serviceIcon, "💗")) + " " + esc(e.o->serviceTitle) + "</strong> pour <strong>"
-           + String(e.o->offeredPrice) + " ❤️</strong></p>\n";
-      if (!e.o->comment.isEmpty()) b += "<p class=\"comment\" style=\"margin: 4px 0;\">« " + esc(e.o->comment) + " »</p>\n";
-      b += "<form method=\"post\" action=\"/offers/" + e.o->id + "/respond\" style=\"margin-top: 8px;\">\n";
-      b += "<button type=\"submit\" name=\"action\" value=\"accept\" class=\"btn-primary\">✅ Accepter et recevoir "
-           + String(e.o->offeredPrice) + " ❤️</button>\n";
-      b += "<button type=\"submit\" name=\"action\" value=\"reject\" class=\"btn-secondary\">❌ Refuser</button>\n";
-      b += "<a href=\"/negotiations\" class=\"btn-secondary\">🔄 Faire une contre-proposition</a>\n";
-      b += "</form>\n</div>\n";
-    }
-    b += "</div>\n";
-  }
-
-  // Grille principale
-  b += "<section class=\"grid\">\n";
-  // Carte niveau de couple (cliquable vers l'historique)
-  b += "<a href=\"/relationship-history\" style=\"text-decoration: none; color: inherit;\">\n";
-  b += "<div class=\"card\" style=\"grid-column: span 2; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;\">\n";
-  b += "<h2 class=\"card-title\" style=\"color: white;\">" + esc(g_levels[rel.levelIndex].icon) + " Niveau de couple : "
-       + esc(g_levels[rel.levelIndex].name) + "</h2>\n";
-  b += "<p style=\"font-size: 1.2rem; margin: 10px 0;\"><strong>" + String(rel.totalCredits)
-       + " crédits</strong> échangés sur les 30 derniers jours</p>\n";
-  if (rel.nextIndex >= 0) {
-    b += "<div style=\"background: rgba(255,255,255,0.2); padding: 10px; border-radius: 4px; margin-top: 10px;\">\n";
-    b += "<p style=\"margin: 0; font-size: 0.9rem;\">Prochain niveau : <strong>" + esc(g_levels[rel.nextIndex].icon) + " "
-         + esc(g_levels[rel.nextIndex].name) + "</strong></p>\n";
-    b += "<p style=\"margin: 5px 0 0 0; font-size: 0.9rem;\">Encore <strong>"
-         + String(g_levels[rel.nextIndex].minCredits - rel.totalCredits) + " crédits</strong> à échanger</p>\n";
-    b += "</div>\n";
-  } else {
-    b += "<p style=\"margin-top: 10px; font-size: 0.9rem;\">🎉 Niveau maximum atteint !</p>\n";
-  }
-  b += "</div>\n</a>\n";
-
-  // Carte bienvenue
-  b += "<div class=\"card\">\n<h2 class=\"card-title\">Bonjour " + esc(user.displayName) + " 💕</h2>\n";
-  b += "<p>Tu as <strong>" + String(user.credits) + " ❤️ crédits</strong>.</p>\n";
-  if (partner) b += "<p>Partenaire : <strong>" + String(partner->credits) + " ❤️</strong></p>\n";
-  b += "</div>\n";
-
-  // Carte "Votre univers"
-  b += "<div class=\"card\">\n<h3 class=\"card-title\">Votre univers</h3>\n<ul class=\"list\">\n";
-  b += "<li>Services que tu proposes : <strong>" + String(myServicesCount) + "</strong></li>\n";
-  b += "<li>Services que ton partenaire propose : <strong>" + String(partnerServicesCount) + "</strong></li>\n";
-  b += "</ul>\n<a class=\"btn-secondary\" href=\"/shop\">Voir la boutique de ton partenaire</a>\n";
-  b += "<a class=\"btn-primary\" href=\"/request-service\">✨ Demander un service</a>\n";
-  b += "<a class=\"btn-primary\" href=\"/offer-service\">💡 Proposer un service</a>\n</div>\n";
-
-  // Offres en attente
-  b += "<div class=\"card\">\n<h3 class=\"card-title\">Offres en attente</h3>\n";
-  if (pendingOffers.empty()) {
-    b += "<p>Aucune offre en attente. Tu peux créer un service ou en acheter un !</p>\n";
-  } else {
-    b += "<ul class=\"list offers\">\n";
-    for (auto* o : pendingOffers) {
-      b += "<li>Offre n°" + o->id + " – proposition de <strong>" + String(o->offeredPrice)
-           + " ❤️</strong> pour le service <strong>#" + o->serviceId + "</strong></li>\n";
-    }
-    b += "</ul>\n<a href=\"/negotiations\" class=\"btn-secondary\">Voir les négociations</a>\n";
-  }
-  b += "</div>\n</section>\n";
-
-  // Don de crédits
-  b += "<section class=\"section\">\n<div class=\"card\">\n<h3 class=\"card-title\">💝 Faire un don de crédits</h3>\n";
-  if (partner) {
-    b += "<p>Offrir des crédits à <strong>" + esc(partner->displayName) + "</strong> (il/elle a actuellement <strong>"
-         + String(partner->credits) + " ❤️</strong>)</p>\n";
-  }
-  b += "<form method=\"post\" action=\"/donate-credits\" class=\"form\">\n";
-  b += "<label>Montant à offrir<input type=\"number\" name=\"amount\" min=\"1\" max=\"" + String(user.credits)
-       + "\" placeholder=\"Ex: 20\" required /></label>\n";
-  b += "<label>Message (optionnel)<textarea name=\"message\" rows=\"2\" placeholder=\"Un petit mot d'accompagnement...\"></textarea></label>\n";
-  b += "<button type=\"submit\" class=\"btn-primary\">Faire le don</button>\n</form>\n</div>\n</section>\n";
-
-  // Utilisation d'un bon cadeau (la version Node affichait cette section en double)
-  b += R"HTMLEND(<section class="section" id="voucher-section">
-<div class="card">
-<h2 class="card-title">🎁 Utiliser un bon cadeau</h2>
-)HTMLEND";
   if (!error.isEmpty()) b += "<div class=\"error\">" + esc(error) + "</div>\n";
-  if (!success.isEmpty()) b += "<div class=\"alert alert-success\"><p style=\"margin: 0;\">" + esc(success) + "</p></div>\n";
-  b += R"HTMLEND(<form method="post" action="/redeem-voucher" class="form">
-<label>Code du bon cadeau (4 chiffres)<input type="text" name="code" placeholder="1234" pattern="\d{4}" title="Entrez exactement 4 chiffres" required /></label>
-<button type="submit" class="btn-primary">Valider le code</button>
-</form>
-</div>
-</section>
-</main>
-<footer style="height: 100px; display: flex; justify-content: center; align-items: center;">
-<div class="gift-icon-container"><a href="#voucher-section" title="Bons cadeaux" style="display: block;"><span style="font-size: 2rem;">🎁</span></a></div>
-</footer>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  var successAlert = document.querySelector('.alert-success');
-  if (successAlert) {
-    successAlert.style.animation = 'pulse 2s infinite';
-    var hearts = ['💖', '💕', '💗', '💝'];
-    for (var i = 0; i < 10; i++) {
-      var heart = document.createElement('div');
-      heart.innerHTML = hearts[Math.floor(Math.random() * hearts.length)];
-      heart.style.position = 'fixed'; heart.style.fontSize = '2rem';
-      heart.style.left = (Math.random() * 100) + 'vw'; heart.style.top = '100vh';
-      heart.style.zIndex = '1000'; heart.style.userSelect = 'none';
-      document.body.appendChild(heart);
-      var animation = heart.animate([
-        { transform: 'translateY(0)', opacity: 1 },
-        { transform: 'translateY(-100vh)', opacity: 0 }
-      ], { duration: Math.random() * 3000 + 2000, easing: 'ease-out' });
-      animation.onfinish = function() { heart.remove(); };
-    }
-  }
-});
-</script>
-</body>
-</html>)HTMLEND";
+  if (!success.isEmpty()) b += "<div class=\"success\">" + esc(success) + "</div>\n";
 
-  // Shell : head + topbar/nav puis corps (b contient la fermeture complète du document)
-  String html;
-  html.reserve(b.length() + 2048);
-  html += "<!DOCTYPE html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"UTF-8\"/>\n<title>Tableau de bord - Love Market</title>\n";
-  html += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>\n";
-  html += "<link rel=\"icon\" type=\"image/svg+xml\" href=\"/favicon.svg\"/>\n<link rel=\"stylesheet\" href=\"/style.css\"/>\n</head>\n<body>\n";
-  html += "<header class=\"topbar\">\n<div class=\"logo\">💕 Love Market</div>\n<nav class=\"nav\">\n";
-  html += "<a href=\"/dashboard\" title=\"Accueil\" class=\"nav-active\">🏠<span class=\"nav-text\"> Accueil</span></a>\n";
-  html += "<a href=\"/shop\" title=\"Boutique\">🛍️<span class=\"nav-text\"> Boutique</span></a>\n";
-  html += "<a href=\"/my-services\" title=\"Mes services\">🤝<span class=\"nav-text\"> Mes services</span></a>\n";
-  html += "<a href=\"/special-events\" title=\"Événements spéciaux\">🎯<span class=\"nav-text\"> Événements</span></a>\n";
-  html += "<a href=\"/negotiations\" title=\"Négociations\" class=\"nav-link-with-badge\">💬<span class=\"nav-text\"> Négociations</span>";
-  if (notif > 0) html += "<span class=\"notification-badge\">" + String(notif) + "</span>";
-  html += "</a>\n";
-  if (user.role == "admin") html += "<a href=\"/admin\" class=\"admin-link\" title=\"Admin\">⚙️<span class=\"nav-text\"> Admin</span></a>\n";
-  html += "</nav>\n<div class=\"user-info\">\n<span class=\"credits\">" + String(user.credits) + " ❤️</span>\n";
-  html += "<span class=\"user-name\">" + esc(user.displayName) + "</span>\n";
-  html += "<a href=\"/logout\" class=\"logout\">Déconnexion</a>\n</div>\n</header>\n";
-  html += "<main class=\"page\">\n";
-  html += b;
-  return html;
-}
+  b += "<div class=\"home-hero\">\n<h1>Bonjour " + esc(user.displayName) + " 💕</h1>\n";
+  b += "<p>" + esc(message) + "</p>\n";
+  b += "<a class=\"btn-primary\" href=\"/wishes/new\">✨ Ajouter une envie</a>\n</div>\n";
 
-// ---------------------------------------------------------------------------
-// GET /shop — views/shop.ejs
-// ---------------------------------------------------------------------------
-String pageShop(User& user) {
-  User* partner = findPartnerOf(user.id);
-  int notif = countNotifications(user.id);
-
-  String b;
-  b.reserve(9000);
-  b += "<section class=\"section\">\n<div class=\"shop-header\">\n";
-  b += "<h1 class=\"section-title\"> Boutique de <span style=\"color: #e91e63;\">"
-       + esc(partner ? partner->displayName : String("partenaire")) + "</span> 💝</h1>\n";
-  if (partner) {
-    b += "<div class=\"user-credits\"><p>Tes crédits : <strong>" + String(user.credits) + " ❤️</strong> — Crédits de ton/ta partenaire <strong>"
-         + String(partner->credits) + " ❤️</strong></p></div>\n";
-  }
-  b += "</div>\n";
-
-  // Services du partenaire
-  std::vector<Service*> services;
-  if (partner) for (auto& s : g_services) if (s.sellerId == partner->id) services.push_back(&s);
-
-  if (services.empty()) {
-    b += "<div class=\"empty-shop\"><p>Ton partenaire n'a encore rien mis en vente. Tu peux lui suggérer une idée douce.</p></div>\n";
+  // Dernières envies du partenaire
+  b += "<section class=\"section\">\n<h2 class=\"section-title\">Les envies de " +
+       esc(partner ? partner->displayName : String("ton partenaire")) + "</h2>\n";
+  if (partnerOpen.empty()) {
+    b += "<div class=\"empty\">Aucune envie publiée pour le moment — c'est le bon moment pour en parler ce soir.</div>\n";
   } else {
-    b += "<div class=\"product-list\">\n";
-    for (auto* s : services) {
-      b += "<div class=\"product-item\">\n<div class=\"product-main\">\n<div class=\"product-icon\">\n";
-      b += "<span class=\"service-icon\" style=\"font-size: 4rem;\">" + esc(iconOr(s->icon, "💗")) + "</span>\n";
-      b += "</div>\n<div class=\"product-details\">\n<h3 class=\"product-title\">" + esc(s->title) + "</h3>\n";
-      b += "<p class=\"product-category\">" + esc(s->category) + "</p>\n";
-      if (!s->description.isEmpty()) b += "<p class=\"product-description\">" + esc(s->description) + "</p>\n";
-      b += "</div>\n</div>\n<div class=\"product-footer\">\n<div class=\"product-price\">\n";
-      b += "<span class=\"price-amount\">" + String(s->price) + " ❤️</span>\n</div>\n";
-      b += "<div class=\"product-actions\">\n";
-      b += "<form method=\"post\" action=\"/services/" + s->id + "/buy\" class=\"inline-form\" onsubmit=\"return confirmPurchase(" + String(s->price) + ", " + String(user.credits) + ")\">\n";
-      b += "<button type=\"submit\" class=\"btn-primary btn-buy\">Acheter</button>\n</form>\n";
-      b += "<form method=\"post\" action=\"/services/" + s->id + "/offer\" class=\"offer-form\">\n";
-      b += "<input type=\"number\" name=\"offeredPrice\" min=\"0\" step=\"1\" placeholder=\"Ta proposition\" required />\n";
-      b += "<input type=\"text\" name=\"comment\" placeholder=\"Ajoute un petit mot\" />\n";
-      b += "<button type=\"submit\" class=\"btn-secondary btn-negotiate\">Négocier</button>\n</form>\n";
-      b += "</div>\n</div>\n</div>\n";
+    b += "<div class=\"mini-list\">\n";
+    size_t shown = 0;
+    for (Wish* w : partnerOpen) {
+      if (shown >= 3) break;
+      shown++;
+      b += "<a class=\"mini-card\" href=\"/partner-wishes\">\n<span class=\"m-title\">" + esc(w->title) + "</span><br/>\n";
+      b += creditBadge(w->credits);
+      if (!w->desiredDate.isEmpty()) b += " <span class=\"chip\">🗓 " + esc(w->desiredDate) + "</span>";
+      b += "\n</a>\n";
     }
-    b += "</div>\n";
+    b += "</div>\n<p class=\"hint\"><a href=\"/partner-wishes\">Voir toutes ses envies →</a></p>\n";
   }
   b += "</section>\n";
-  b += R"JSSCRIPT(<script>
-function confirmPurchase(price, currentCredits) {
-  if (currentCredits < price) {
-    alert("Crédits insuffisants !\n\nPrix : " + price + " ❤️\nVotre solde : " + currentCredits + " ❤️\nIl vous manque " + (price - currentCredits) + " ❤️");
-    return false;
+
+  // Engagements en cours
+  b += "<section class=\"section\">\n<h2 class=\"section-title\">Nos engagements en cours</h2>\n";
+  if (engagements.empty()) {
+    b += "<div class=\"empty\">Aucun engagement en cours. Chaque chose en son temps.</div>\n";
+  } else {
+    b += "<div class=\"mini-list\">\n";
+    size_t shown = 0;
+    for (Wish* w : engagements) {
+      if (shown >= 3) break;
+      shown++;
+      User* author = findUser(w->userId);
+      User* maker = findUser(w->acceptedBy);
+      b += "<a class=\"mini-card\" href=\"/exchanges\">\n<span class=\"m-title\">" + esc(w->title) + "</span><br/>\n";
+      b += "<span class=\"chip\">Réalisé par " + esc(maker ? maker->displayName : "?") + "</span> ";
+      b += "<span class=\"chip\">Pour " + esc(author ? author->displayName : "?") + "</span> ";
+      if (w->hasRealizationReportedAt) b += "<span class=\"status status-accepted\">à confirmer</span>";
+      b += "\n</a>\n";
+    }
+    b += "</div>\n<p class=\"hint\"><a href=\"/exchanges\">Voir nos échanges →</a></p>\n";
   }
-  var newBalance = currentCredits - price;
-  var message =
-    "Êtes-vous sûr de vouloir acheter ce service ?\n\n" +
-    "Solde actuel : " + currentCredits + " ❤️\n" +
-    "Prix : " + price + " ❤️\n" +
-    "Nouveau solde : " + newBalance + " ❤️\n\n" +
-    "Les crédits seront débités immédiatement.\n" +
-    "Votre partenaire devra accepter la demande.\n" +
-    "Si refusé, vous serez remboursé.";
-  return confirm(message);
-}
-</script>
-</body>
-</html>)JSSCRIPT";
+  b += "</section>\n";
 
-  String html;
-  html.reserve(b.length() + 2048);
-  html += "<!DOCTYPE html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"UTF-8\"/>\n<title>Boutique - Love Market</title>\n";
-  html += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>\n";
-  html += "<link rel=\"icon\" type=\"image/svg+xml\" href=\"/favicon.svg\"/>\n<link rel=\"stylesheet\" href=\"/style.css\"/>\n</head>\n<body>\n";
-  html += "<header class=\"topbar\">\n<div class=\"logo\">💕 Love Market</div>\n<nav class=\"nav\">\n";
-  html += "<a href=\"/dashboard\" title=\"Accueil\">🏠<span class=\"nav-text\"> Accueil</span></a>\n";
-  html += "<a href=\"/shop\" title=\"Boutique\" class=\"nav-active\">🛍️<span class=\"nav-text\"> Boutique</span></a>\n";
-  html += "<a href=\"/my-services\" title=\"Mes services\">🤝<span class=\"nav-text\"> Mes services</span></a>\n";
-  html += "<a href=\"/negotiations\" title=\"Négociations\" class=\"nav-link-with-badge\">💬<span class=\"nav-text\"> Négociations</span>";
-  if (notif > 0) html += "<span class=\"notification-badge\">" + String(notif) + "</span>";
-  html += "</a>\n";
-  if (user.role == "admin") html += "<a href=\"/admin\" class=\"admin-link\" title=\"Admin\">⚙️<span class=\"nav-text\"> Admin</span></a>\n";
-  html += "</nav>\n<div class=\"user-info\">\n<span class=\"credits\">" + String(user.credits) + " ❤️</span>\n";
-  html += "<span class=\"user-name\">" + esc(user.displayName) + "</span>\n";
-  html += "<a href=\"/logout\" class=\"logout\">Déconnexion</a>\n</div>\n</header>\n<main class=\"page\">\n";
-  String body = b;
-  int idx = body.lastIndexOf("</body>");
-  if (idx > 0) body = body.substring(0, idx);
-  html += body;
-  html += "</main>\n</body>\n</html>";
-  return html;
+  // Derniers moments
+  b += "<section class=\"section\">\n<h2 class=\"section-title\">Nos derniers moments</h2>\n";
+  if (moments.empty()) {
+    b += "<div class=\"empty\">Chaque envie réalisée rejoindra notre album des moments.</div>\n";
+  } else {
+    b += "<div class=\"mini-list\">\n";
+    size_t shown = 0;
+    for (Wish* w : moments) {
+      if (shown >= 2) break;
+      shown++;
+      b += "<a class=\"mini-card\" href=\"/moments\">\n<span class=\"m-title\">" + esc(w->title) + "</span><br/>\n";
+      if (w->hasCompletedAt) b += "<span class=\"chip\">" + esc(formatDateTimeFR(w->completedAt)) + "</span>";
+      b += "\n</a>\n";
+    }
+    b += "</div>\n<p class=\"hint\"><a href=\"/moments\">Voir notre album →</a></p>\n";
+  }
+  b += "</section>\n";
+
+  // Progression du couple + solde, affichés de manière discrète
+  b += "<div class=\"footer-quiet\">\n";
+  b += esc(g_levels[rel.levelIndex].icon) + " " + esc(g_levels[rel.levelIndex].name) +
+       " · " + String(rel.completedCount) + (rel.completedCount > 1 ? " moments partagés" : " moment partagé");
+  if (rel.nextIndex >= 0) {
+    int remaining = g_levels[rel.nextIndex].threshold - rel.completedCount;
+    b += " · encore " + String(remaining) + " pour être " + esc(g_levels[rel.nextIndex].name);
+  }
+  b += " · tes crédits : " + String(user.credits) + " ♥\n</div>\n";
+
+  return renderPage("Accueil", "/dashboard", user.id, user.displayName,
+                    user.credits, user.role == "admin", b);
 }
 
 // ---------------------------------------------------------------------------
-// GET /my-services — views/my-services.ejs
+// GET /my-wishes — rubrique « Mes envies »
+// Sous-sections : disponibles / acceptées par le partenaire / réalisées
 // ---------------------------------------------------------------------------
-String pageMyServices(User& user) {
-  int notif = countNotifications(user.id);
+String pageMyWishes(User& user) {
+  User* partner = findPartnerOf(user.id);
 
   String b;
-  b.reserve(9000);
-  b += "<section class=\"section\">\n<h1 class=\"section-title\">Mes services 🌸</h1>\n";
-  b += "<div class=\"card\">\n<h2 class=\"card-title\">Créer un nouveau service</h2>\n";
-  b += "<form method=\"post\" action=\"/services\" class=\"form\">\n";
-  b += "<label>Titre<input type=\"text\" name=\"title\" placeholder=\"Petit déjeuner au lit\" required /></label>\n";
-  b += "<label>Description<textarea name=\"description\" rows=\"2\" placeholder=\"Décris ton service\"></textarea></label>\n";
-  b += "<label>Catégorie<select name=\"category\">" + categoryOptions("Romantique") + "</select></label>\n";
-  b += "<label>Icône<select name=\"icon\">" + iconOptions("💗") + "</select></label>\n";
-  b += "<label>Prix (en crédits ❤️)<input type=\"number\" name=\"price\" min=\"0\" step=\"1\" value=\"20\" /></label>\n";
-  b += "<button type=\"submit\" class=\"btn-primary\">Créer le service</button>\n</form>\n</div>\n";
-  b += "<div class=\"cards\">\n";
+  b.reserve(12000);
+  b += "<section class=\"section\">\n";
+  b += "<h1 class=\"section-title\">Mes envies</h1>\n";
+  b += "<p class=\"subtitle\">Ce que tu aimerais vivre, recevoir ou partager.</p>\n";
+  b += "<a class=\"btn-primary btn-full\" href=\"/wishes/new\">✨ Ajouter une envie</a>\n</section>\n";
 
-  std::vector<Service*> mine;
-  for (auto& s : g_services) if (s.sellerId == user.id) mine.push_back(&s);
+  // --- Envies disponibles ---
+  b += "<section class=\"section\">\n<h2 class=\"section-title\">Envies disponibles</h2>\n";
+  bool anyOpen = false;
+  for (auto& w : g_wishes) {
+    if (w.userId != user.id || w.status != "open") continue;
+    anyOpen = true;
+    b += "<div class=\"card wish-card\">\n<h3 class=\"wish-title\">" + esc(w.title) + "</h3>\n<div class=\"wish-meta\">\n";
+    b += chipCategory(w);
+    b += creditBadge(w.credits);
+    b += chipDate(w);
+    b += "<span class=\"status status-open\">en attente</span>\n</div>\n";
+    if (!w.description.isEmpty()) b += "<p class=\"wish-desc\">" + esc(w.description) + "</p>\n";
+    b += "<div class=\"actions\">\n";
+    b += "<a class=\"btn-secondary\" href=\"/wishes/" + w.id + "/edit\">Modifier</a>\n";
+    b += "<form method=\"post\" action=\"/wishes/" + w.id + "/delete\" class=\"inline-form\" "
+         "onsubmit=\"return confirm('Supprimer définitivement cette envie ?')\">"
+         "<button type=\"submit\" class=\"btn-danger\">Supprimer</button></form>\n";
+    b += "</div>\n</div>\n";
+  }
+  if (!anyOpen) b += "<div class=\"empty\">Aucune envie disponible — publie ta première envie !</div>\n";
+  b += "</section>\n";
 
-  if (mine.empty()) b += "<p>Tu ne proposes encore rien. Crée ton premier service !</p>\n";
-  for (auto* s : mine) {
-    b += "<div class=\"card\">\n<h2 class=\"card-title\"><span class=\"service-icon\">" + esc(iconOr(s->icon, "💗")) + "</span> " + esc(s->title) + "</h2>\n";
-    b += "<p class=\"category\">" + esc(s->category) + "</p>\n";
-    if (!s->description.isEmpty()) b += "<p>" + esc(s->description) + "</p>\n";
-    b += "<p class=\"price\">" + String(s->price) + " ❤️</p>\n";
-    b += "<form method=\"get\" action=\"/services/" + s->id + "/edit\" class=\"inline-form\"><button type=\"submit\" class=\"btn-secondary\">Modifier</button></form>\n";
-    b += "<form method=\"post\" action=\"/services/" + s->id + "/delete\" class=\"inline-form\"><button type=\"submit\" class=\"btn-secondary\">Supprimer</button></form>\n";
+  // --- Envies acceptées par le partenaire ---
+  b += "<section class=\"section\">\n<h2 class=\"section-title\">Envies acceptées par " +
+       esc(partner ? partner->displayName : String("ton partenaire")) + "</h2>\n";
+  bool anyAccepted = false;
+  for (auto& w : g_wishes) {
+    if (w.userId != user.id || w.status != "accepted") continue;
+    anyAccepted = true;
+    User* maker = findUser(w.acceptedBy);
+    b += "<div class=\"card wish-card\">\n<h3 class=\"wish-title\">" + esc(w.title) + "</h3>\n<div class=\"wish-meta\">\n";
+    b += chipCategory(w);
+    b += creditBadge(w.credits);
+    b += chipDate(w);
+    b += "<span class=\"status status-accepted\">engage" + (maker && maker->id == "Alice" ? String("e") : String("")) + " : " +
+         esc(maker ? maker->displayName : "?") + "</span>\n</div>\n";
+    if (!w.description.isEmpty()) b += "<p class=\"wish-desc\">" + esc(w.description) + "</p>\n";
+    if (w.hasRealizationReportedAt) {
+      b += "<div class=\"success\">🎉 Réalisation signalée ! Confirme dans <a href=\"/exchanges\">Nos échanges</a>.</div>\n";
+    }
+    b += "<div class=\"actions\">\n";
+    b += "<form method=\"post\" action=\"/wishes/" + w.id + "/cancel\" class=\"inline-form\" "
+         "onsubmit=\"return confirm('Annuler cette envie ? Aucun crédit ne sera attribué.')\">"
+         "<button type=\"submit\" class=\"btn-danger\">Annuler cette envie</button></form>\n";
+    b += "</div>\n</div>\n";
+  }
+  if (!anyAccepted) b += "<div class=\"empty\">Aucune envie acceptée pour l'instant.</div>\n";
+  b += "</section>\n";
+
+  // --- Envies réalisées ---
+  b += "<section class=\"section\">\n<h2 class=\"section-title\">Envies réalisées</h2>\n";
+  bool anyCompleted = false;
+  for (size_t i = g_wishes.size(); i > 0; i--) {
+    Wish& w = g_wishes[i - 1];
+    if (w.userId != user.id || w.status != "completed") continue;
+    anyCompleted = true;
+    User* maker = findUser(w.acceptedBy);
+    b += "<div class=\"card wish-card\">\n<h3 class=\"wish-title\">" + esc(w.title) + "</h3>\n<div class=\"wish-meta\">\n";
+    b += chipCategory(w);
+    if (w.hasCompletedAt) b += "<span class=\"chip\">" + esc(formatDateTimeFR(w.completedAt)) + "</span>\n";
+    if (w.credits > 0 && maker) {
+      b += "<span class=\"credit-badge\">" + String(w.credits) + " ♥ gagnés par " + esc(maker->displayName) + "</span>\n";
+    } else {
+      b += creditBadge(w.credits);
+    }
+    b += "</div>\n";
+    if (!w.memoryComment.isEmpty()) b += "<p class=\"wish-desc\">« " + esc(w.memoryComment) + " »</p>\n";
     b += "</div>\n";
   }
-  b += "</div>\n</section>\n</main>\n</body>\n</html>";
+  if (!anyCompleted) b += "<div class=\"empty\">Tes envies réalisées apparaîtront ici — et dans <a href=\"/moments\">Nos moments</a>.</div>\n";
+  b += "</section>\n";
 
-  String html;
-  html.reserve(b.length() + 2048);
-  html += "<!DOCTYPE html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"UTF-8\"/>\n<title>Mes services - Love Market</title>\n";
-  html += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>\n";
-  html += "<link rel=\"icon\" type=\"image/svg+xml\" href=\"/favicon.svg\"/>\n<link rel=\"stylesheet\" href=\"/style.css\"/>\n</head>\n<body>\n";
-  html += "<header class=\"topbar\">\n<div class=\"logo\">💕 Love Market</div>\n<nav class=\"nav\">\n";
-  html += "<a href=\"/dashboard\" title=\"Accueil\">🏠<span class=\"nav-text\"> Accueil</span></a>\n";
-  html += "<a href=\"/shop\" title=\"Boutique\">🛍️<span class=\"nav-text\"> Boutique</span></a>\n";
-  html += "<a href=\"/my-services\" title=\"Mes services\" class=\"nav-active\">🤝<span class=\"nav-text\"> Mes services</span></a>\n";
-  html += "<a href=\"/negotiations\" title=\"Négociations\" class=\"nav-link-with-badge\">💬<span class=\"nav-text\"> Négociations</span>";
-  if (notif > 0) html += "<span class=\"notification-badge\">" + String(notif) + "</span>";
-  html += "</a>\n";
-  if (user.role == "admin") html += "<a href=\"/admin\" class=\"admin-link\" title=\"Admin\">⚙️<span class=\"nav-text\"> Admin</span></a>\n";
-  html += "</nav>\n<div class=\"user-info\">\n<span class=\"credits\">" + String(user.credits) + " ❤️</span>\n";
-  html += "<span class=\"user-name\">" + esc(user.displayName) + "</span>\n";
-  html += "<a href=\"/logout\" class=\"logout\">Déconnexion</a>\n</div>\n</header>\n<main class=\"page\">\n";
-  String body = b;
-  int idx = body.lastIndexOf("</body>");
-  if (idx > 0) body = body.substring(0, idx);
-  html += body;
-  html += "</body>\n</html>";
-  return html;
+  return renderPage("Mes envies", "/my-wishes", user.id, user.displayName,
+                    user.credits, user.role == "admin", b);
 }
 
 // ---------------------------------------------------------------------------
-// GET /services/:id/edit — views/edit-service.ejs
+// GET /wishes/new et GET /wishes/{}/edit — création / modification d'une envie
+// (modification autorisée uniquement tant que l'envie est disponible)
 // ---------------------------------------------------------------------------
-String pageEditService(User& user, Service& service) {
-  int notif = countNotifications(user.id);
+String pageWishForm(User& user, Wish* wish) {
+  bool isEdit = (wish != nullptr);
+  String action = isEdit ? "/wishes/" + wish->id + "/edit" : String("/wishes");
+  int credits = isEdit ? wish->credits : 2;
+  const char* VALUES[5] = {"0 — gratuite", "1 — petite envie", "2 — envie simple",
+                           "3 — envie importante", "4 — grande envie"};
 
   String b;
-  b.reserve(5000);
-  b += "<section class=\"section\">\n<h1 class=\"section-title\">Modifier le service</h1>\n";
-  b += "<div class=\"card\">\n<form method=\"post\" action=\"/services/" + service.id + "/edit\" class=\"form\">\n";
-  b += "<label>Titre<input type=\"text\" name=\"title\" value=\"" + esc(service.title) + "\" required /></label>\n";
-  b += "<label>Description<textarea name=\"description\" rows=\"2\">" + esc(service.description) + "</textarea></label>\n";
-  b += "<label>Catégorie<select name=\"category\">" + categoryOptions(service.category) + "</select></label>\n";
-  b += "<label>Icône<select name=\"icon\">" + iconOptions(service.icon) + "</select></label>\n";
-  b += "<label>Prix (en crédits ❤️)<input type=\"number\" name=\"price\" min=\"0\" step=\"1\" value=\"" + String(service.price) + "\" /></label>\n";
-  b += "<button type=\"submit\" class=\"btn-primary\">Enregistrer</button>\n";
-  b += "<a href=\"/my-services\" class=\"btn-secondary\">Annuler</a>\n</form>\n</div>\n</section>";
+  b.reserve(6000);
+  b += "<section class=\"section\">\n";
+  b += isEdit ? "<h1 class=\"section-title\">Modifier mon envie</h1>\n"
+              : "<h1 class=\"section-title\">Nouvelle envie</h1>\n";
+  b += "<p class=\"subtitle\">Quelque chose que tu aimerais vivre, recevoir ou partager.</p>\n";
+  b += "<div class=\"card\">\n<form method=\"post\" action=\"" + action + "\" class=\"form\">\n";
+  b += "<label>Titre *<input type=\"text\" name=\"title\" placeholder=\"Ex : une soirée romantique organisée par toi\" value=\"" +
+       (isEdit ? esc(wish->title) : String("")) + "\" required /></label>\n";
+  b += "<label>Description<textarea name=\"description\" rows=\"3\" "
+       "placeholder=\"Décris ton envie comme tu la ressens\">" +
+       (isEdit ? esc(wish->description) : String("")) + "</textarea></label>\n";
+  b += "<label>Catégorie<select name=\"category\">" +
+       categoryOptions(isEdit ? wish->category : (g_categories.empty() ? String("") : g_categories[0].name)) +
+       "</select></label>\n";
 
-  return renderPage("Modifier un service", "/my-services", false, b, user.displayName,
-                    user.credits, user.role == "admin", notif);
+  // Valeur en crédits : la récompense que gagnera le réalisateur (0 à 4)
+  b += "<label>Valeur en crédits *<div class=\"credit-choices\">\n";
+  for (int i = 0; i <= 4; i++) {
+    b += "<label><input type=\"radio\" name=\"credits\" value=\"" + String(i) + "\"" +
+         (credits == i ? String(" checked") : String("")) + " /><span>♥ " + String(i) +
+         " · " + VALUES[i] + "</span></label>\n";
+  }
+  b += "</div></label>\n";
+  b += "<label>Date ou période souhaitée<input type=\"text\" name=\"desiredDate\" "
+       "placeholder=\"Ex : dès que possible, le week-end du 12...\" value=\"" +
+       (isEdit ? esc(wish->desiredDate) : String("")) + "\" /></label>\n";
+  b += "<p class=\"hint\">La valeur en crédits est la récompense que gagnera ton/ta partenaire "
+       "en réalisant cette envie. Une envie gratuite est aussi précieuse qu'une autre.</p>\n";
+  b += "<button type=\"submit\" class=\"btn-primary btn-full\">" +
+       (isEdit ? String("Enregistrer") : String("Publier mon envie")) + "</button>\n";
+  b += "<a class=\"btn-secondary btn-full\" href=\"/my-wishes\">Annuler</a>\n";
+  b += "</form>\n</div>\n</section>\n";
+
+  return renderPage(isEdit ? "Modifier une envie" : "Nouvelle envie", "/my-wishes",
+                    user.id, user.displayName, user.credits, user.role == "admin", b);
 }
 
+// ---------------------------------------------------------------------------
+// 404
+// ---------------------------------------------------------------------------
 String page404() {
   String head = "<title>Page introuvable - Love Market</title>\n<link rel=\"stylesheet\" href=\"/style.css\"/>\n";
   String body = "<main class=\"page\"><section class=\"center-card\"><div class=\"card card-login\">"

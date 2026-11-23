@@ -3,113 +3,106 @@
 #include <vector>
 
 // ---------------------------------------------------------------------------
-// Modèle de données - portage ESP32 de l'application Love Market (Node/Express)
-// Le format data.json est identique à celui de la version Node.
+// Modèle de données V1 - Love Market « envies » (refonte)
+//
+// Cycle de vie d'une envie :
+//   open -> accepted -> completed   (crédits attribués à la confirmation,
+//                                    uniquement par le bénéficiaire)
+//   accepted -> open                (abandon par le réalisateur)
+//   accepted -> cancelled           (annulation par l'auteur, aucun crédit)
 // ---------------------------------------------------------------------------
 
 struct User {
   String id;
-  String password;
+  String passwordHash;   // format "sel$sha256hex"
   String role;
   String displayName;
   int credits = 0;
 };
 
-struct Service {
+struct Wish {
   String id;
-  String sellerId;
+  String userId;         // auteur = bénéficiaire de l'envie
   String title;
   String description;
   String category;
-  int price = 0;
-  String icon;
+  int credits = 0;       // 0..4 : récompense du réalisateur
+  String photo;          // réservé V1.1 (jamais rempli en V1)
+  String desiredDate;    // texte libre (« dès que possible », « le 12 juin »...)
+  String status;         // open | accepted | completed | cancelled
+  String acceptedBy;     // réalisateur (vide si open)
+  String memoryComment;  // commentaire facultatif sur le moment réalisé
+  bool hasCreatedAt = false;             time_t createdAt = 0;
+  bool hasAcceptedAt = false;            time_t acceptedAt = 0;
+  bool hasRealizationReportedAt = false; time_t realizationReportedAt = 0;
+  bool hasCompletedAt = false;           time_t completedAt = 0;
+  bool hasCancelledAt = false;           time_t cancelledAt = 0;
+  std::vector<String> readBy;            // partenaires ayant vu l'envie publiée
 };
 
-struct Offer {
+struct CreditTransaction {
   String id;
-  String serviceId;          // null -> vide
-  String fromUserId;
-  String toUserId;
-  int offeredPrice = 0;
-  String comment;
-  String status;             // pending | accepted | rejected | countered | realized
-  String type;               // purchase | negotiation | request | donation | special_event
-  String serviceTitle;
-  String serviceCategory;
-  String serviceIcon;
-  String originalRequesterId;
-  String parentOfferId;
-  String rootOfferId;
-  bool isSuperService = false;
-  int superServiceBonus = 0;
-  int debitedAmount = -1;    // -1 = absent (seulement pour les achats)
-  String eventId;
-  bool hasCreatedAt = false;
-  time_t createdAt = 0;
-  String feedback;           // happy | neutral | sad
-  bool hasFeedbackAt = false;
-  time_t feedbackAt = 0;
-  std::vector<String> readBy;
-};
-
-struct Voucher {
-  String id;
-  String code;
-  int credits = 0;
-  String comment;
-  bool used = false;
-  String usedBy;
-  bool hasCreatedAt = false;
-  time_t createdAt = 0;
-  bool hasUsedAt = false;
-  time_t usedAt = 0;
-};
-
-struct SpecialEvent {
-  String id;
-  String title;
+  String userId;         // bénéficiaire des crédits
+  int amount = 0;
+  String type;           // wish_completed | admin_adjustment
+  String wishId;         // facultatif
   String description;
-  int credits = 0;
-  String targetUser;         // both | Alice | Sylvain
-  String status;             // active | completed | cancelled
-  bool hasCreatedAt = false;
-  time_t createdAt = 0;
-  String assignedTo;
-  String completedBy;
-  bool hasCompletedAt = false;
-  time_t completedAt = 0;
+  bool hasCreatedAt = false; time_t createdAt = 0;
+};
+
+struct Notification {
+  String id;
+  String userId;
+  String type;           // new_wish | wish_accepted | realization_reported |
+                         // wish_abandoned | realization_confirmed | wish_cancelled
+  String wishId;         // facultatif
+  String message;
+  bool hasCreatedAt = false; time_t createdAt = 0;
+  bool hasReadAt = false;    time_t readAt = 0;
+};
+
+struct Category {
+  String name;
+  String icon;
 };
 
 struct RelLevel {
   String name;
-  int minCredits = 0;
+  int threshold = 0;     // nombre d'envies confirmées réalisées (cumulatif)
   String icon;
 };
 
-// Données de niveau de couple calculées
+// Progression du couple calculée
 struct RelData {
   int levelIndex = 0;
-  int totalCredits = 0;
-  int nextIndex = -1;        // -1 = niveau maximum atteint
+  int completedCount = 0;
+  int nextIndex = -1;    // -1 = niveau maximum atteint
+  int nextThreshold = 0;
 };
 
-// --- Store global (mêmes clés que le data.json de la version Node) ---
-extern std::vector<User> g_users;
-extern std::vector<Service> g_services;
-extern std::vector<Offer> g_offers;
-extern std::vector<Voucher> g_vouchers;
-extern std::vector<SpecialEvent> g_events;
-extern std::vector<RelLevel> g_levels;
-extern int g_nextServiceId;
-extern int g_nextOfferId;
-extern int g_nextVoucherId;
-extern int g_nextEventId;
+// Rubriques de navigation (badges de notifications)
+#define RUBRIQUE_PARTNER   "partner"    // Ses envies (nouvelle envie du partenaire)
+#define RUBRIQUE_EXCHANGES "exchanges"  // Nos échanges (acceptation, abandon, signalement, annulation)
+#define RUBRIQUE_MOMENTS   "moments"    // Nos moments (réalisation confirmée)
 
-// --- Chargement / sauvegarde (LittleFS /data.json) ---
+// --- Store global (format data.json V1) ---
+extern std::vector<User> g_users;
+extern std::vector<Wish> g_wishes;
+extern std::vector<CreditTransaction> g_transactions;
+extern std::vector<Notification> g_notifications;
+extern std::vector<Category> g_categories;
+extern std::vector<RelLevel> g_levels;
+extern int g_nextWishId;
+extern int g_nextTransactionId;
+extern int g_nextNotificationId;
+
+// --- Chargement / sauvegarde (LittleFS /data.json, écriture atomique) ---
 void loadStore();
 void saveStore();
 String exportStoreJSON();             // sérialisation compacte (export admin)
-bool importStoreJSON(const String&);  // remplace tout le store, retourne true si OK
+bool importStoreJSON(const String&);  // remplace tout le store V1, true si OK
+bool hasLegacyArchive();              // /legacy.json présent (données V0 archivées)
+String exportLegacyJSON();            // contenu de /legacy.json ("" si absent)
 
 // --- Temps ---
 time_t nowEpoch();                    // heure de compilation du firmware + uptime
@@ -120,17 +113,26 @@ time_t parseISO8601(const String&);
 // --- Recherches ---
 User* findUser(const String& id);
 User* findPartnerOf(const String& userId); // premier utilisateur d'id différent
-Service* findService(const String& id);
-Offer* findOffer(const String& id);
-Voucher* findVoucherByCode(const String& code);
-SpecialEvent* findEvent(const String& id);
+Wish* findWish(const String& id);
+
+// --- Mots de passe (SHA-256 + sel, mbedTLS) ---
+String sha256Hex(const String& data);
+String hashPassword(const String& salt, const String& password); // "salt$hex"
+bool verifyPassword(User& u, const String& password);
+void applyFixedPasswords(); // réapplique les mots de passe fixes après chargement/import
 
 // --- Logique métier ---
 void getRelationshipData(RelData& out);
-int countNotifications(const String& userId);      // badge de négociations non lues
-int superServiceBonus(int basePrice);              // Math.round(p * 0.3)
-Offer* createOffer(const String& fromUserId, const String& toUserId, int price,
-                   const String& type, const String& comment); // id/createdAt auto
+int countCompletedWishes();
+Wish* createWish(const String& userId, const String& title, const String& description,
+                 const String& category, int credits, const String& desiredDate);
+CreditTransaction* addTransaction(const String& userId, int amount, const String& type,
+                                  const String& wishId, const String& description);
+Notification* addNotification(const String& userId, const String& type,
+                              const String& wishId, const String& message);
+int countNotifications(const String& userId);                       // toutes non lues
+int countUnreadForRubrique(const String& userId, const char* rubrique); // badge
+void markRubriqueNotificationsRead(const String& userId, const char* rubrique);
 
 // --- Sessions (cookie lm_sid, stockage RAM, flash messages par session) ---
 #define LM_SESSION_MAX 6

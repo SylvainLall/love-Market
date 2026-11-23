@@ -4,19 +4,20 @@
 // Échappement HTML (équivalent <%= %> EJS)
 String esc(const String& raw);
 
-// Options des <select> catégories / icônes (liste identique aux vues EJS)
+// Pastille de valeur en crédits (♥ 0..4) — « envie gratuite » si 0
+String creditBadge(int credits);
+
+// Options des catégories (stockées dans data.json, gérées dans l'admin)
 String categoryOptions(const String& selected = "");
-String iconOptions(const String& selected = "");
 
-// Page complète avec layout (topbar + nav + main) — équivalent layout.ejs
-// showEventsLink : les pages dashboard / relationship-history / special-events
-// affichent aussi le lien "Événements" dans la nav (comme l'original)
-// notificationCount : badge affiché sur le lien Négociations (0 = pas de badge)
-String renderPage(const String& title, const String& currentPath, bool showEventsLink,
-                  const String& bodyHtml, const String& userDisplayName,
-                  int userCredits, bool isAdmin, int notificationCount);
+// Page complète avec layout (topbar + nav basse mobile + main) — layout.ejs
+// Les badges de notifications sont calculés pour l'utilisateur courant
+// (Ses envies / Nos échanges / Nos moments).
+String renderPage(const String& title, const String& currentPath, const String& userId,
+                  const String& userDisplayName, int userCredits, bool isAdmin,
+                  const String& bodyHtml);
 
-// Page autonome sans layout (login, bon cadeau imprimable)
+// Page autonome sans layout (login, 404)
 String renderBarePage(const String& headHtml, const String& bodyHtml);
 
 // CSS et favicon embarqués dans le firmware (aucun upload LittleFS requis)

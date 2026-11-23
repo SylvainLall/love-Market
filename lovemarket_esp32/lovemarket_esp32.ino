@@ -1,10 +1,17 @@
 // ===========================================================================
-// Love Market pour ESP32-S3 (N16R8) — portage de la version Node.js/Express
+// Love Market V1 pour ESP32-S3 (N16R8) — application « envies »
+//
+// Philosophie : « Tes envies. Mes envies. Nos plaisirs. »
+//   1. Chacun publie ses envies (récompense 0 à 4 crédits).
+//   2. Le partenaire découvre et accepte librement (aucune obligation).
+//   3. Le réalisateur signale sa réalisation.
+//   4. Seul le bénéficiaire confirme : les crédits sont attribués une seule
+//      fois, atomiquement, et journalisés.
 //
 // - Serveur HTTP embarqué (WebServer.h, bibliothèque standard ESP32)
 // - Point d'accès WiFi autonome "PPmark" (aucune connexion internet requise)
-// - Données persistées dans LittleFS (/data.json, format identique à la version Node)
-// - Interfaces HTML identiques aux vues EJS (style.css embarqué dans le firmware)
+// - Données persistées dans LittleFS (/data.json, écriture atomique + /data.bak)
+// - Interfaces HTML embarquées en PROGMEM (style.css + favicon)
 //
 // Réglages IDE Arduino (carte "ESP32S3 Dev Module") :
 //   Flash Size      : 16MB
@@ -54,19 +61,58 @@ static User* currentUser() {
   return findUser(s->userId);
 }
 
+static Session* currentSession() {
+  return sessionFind(getCookieToken());
+}
+
 static void redirect(const char* url) {
   server.sendHeader("Location", url, true);
   server.send(302, "text/plain", "");
 }
 
 static void takeFlash(String& err, String& ok) {
-  Session* s = sessionFind(getCookieToken());
+  Session* s = currentSession();
   if (s) { err = s->flashError; ok = s->flashSuccess; s->flashError = ""; s->flashSuccess = ""; }
   else   { err = ""; ok = ""; }
 }
 
+static void flashError(const String& msg) {
+  Session* s = currentSession();
+  if (s) s->flashError = msg;
+}
+
+static void flashSuccess(const String& msg) {
+  Session* s = currentSession();
+  if (s) s->flashSuccess = msg;
+}
+
+// Accès réservé à l'administration
+static bool isAdmin(User* user) {
+  return user && user->role == "admin";
+}
+
 // ---------------------------------------------------------------------------
-// Enregistrement des routes (équivalent des routes Express de index.js)
+// Helpers métier (cycle de vie des envies)
+// ---------------------------------------------------------------------------
+static bool isKnownCategory(const String& cat) {
+  for (auto& c : g_categories) if (c.name == cat) return true;
+  return false;
+}
+
+static String sanitizeCategory(const String& cat) {
+  if (isKnownCategory(cat)) return cat;
+  return g_categories.empty() ? String("") : g_categories[0].name;
+}
+
+static int clampCredits(const String& raw) {
+  int v = raw.toInt();
+  if (raw.isEmpty() || v < 0) v = 0;
+  if (v > 4) v = 4;
+  return v;
+}
+
+// ---------------------------------------------------------------------------
+// Enregistrement des routes
 // ---------------------------------------------------------------------------
 void setupRoutes() {
   // --- Statique ---
@@ -94,9 +140,11 @@ void setupRoutes() {
   server.on("/login", HTTP_POST, []() {
     String userId = server.arg("userId");
     String password = server.arg("password");
-    User* u = nullptr;
-    for (auto& x : g_users) if (x.id == userId && x.password == password) { u = &x; break; }
-    if (!u) { server.send(200, "text/html", pageLogin("Identifiants incorrects")); return; }
+    User* u = findUser(userId);
+    if (!u || !verifyPassword(*u, password)) {
+      server.send(200, "text/html", pageLogin("Identifiants incorrects"));
+      return;
+    }
     Session* s = sessionCreate(u->id);
     server.sendHeader("Set-Cookie", String("lm_sid=") + s->token + "; Path=/; HttpOnly; SameSite=Lax");
     redirect("/dashboard");
@@ -107,496 +155,371 @@ void setupRoutes() {
     redirect("/login");
   });
 
-  // --- Dashboard (consomme les messages flash de la session) ---
+  // --- Accueil (consomme les messages flash de la session) ---
   server.on("/dashboard", HTTP_GET, []() {
     User* user = currentUser();
     if (!user) return redirect("/login");
     String err, ok;
     takeFlash(err, ok);
-    server.send(200, "text/html", pageDashboard(*user, err, ok));
+    server.send(200, "text/html", pageHome(*user, err, ok));
   });
 
-  // --- Boutique ---
-  server.on("/shop", HTTP_GET, []() {
+  // --- Rubrique « Mes envies » ---
+  server.on("/my-wishes", HTTP_GET, []() {
     User* user = currentUser();
     if (!user) return redirect("/login");
-    server.send(200, "text/html", pageShop(*user));
+    server.send(200, "text/html", pageMyWishes(*user));
   });
 
-  // --- Mes services ---
-  server.on("/my-services", HTTP_GET, []() {
+  // --- Créer une envie ---
+  server.on("/wishes/new", HTTP_GET, []() {
     User* user = currentUser();
     if (!user) return redirect("/login");
-    server.send(200, "text/html", pageMyServices(*user));
+    server.send(200, "text/html", pageWishForm(*user, nullptr));
   });
-
-  // --- Créer un service ---
-  server.on("/services", HTTP_POST, []() {
+  server.on("/wishes", HTTP_POST, []() {
     User* user = currentUser();
     if (!user) return redirect("/login");
+    User* partner = findPartnerOf(user->id);
     String title = server.arg("title");
-    int price = server.arg("price").toInt();
-    if (title.isEmpty() || price == 0) return redirect("/my-services"); // !title || !price (comportement JS)
-    Service s;
-    s.id = String(g_nextServiceId++);
-    s.sellerId = user->id;
-    s.title = title;
-    s.description = server.arg("description");
-    s.category = server.arg("category").isEmpty() ? String("Romantique") : server.arg("category");
-    s.price = price;
-    s.icon = server.arg("icon").isEmpty() ? String("💗") : server.arg("icon");
-    g_services.push_back(s);
-    saveStore();
-    redirect("/my-services");
-  });
-
-  // --- Édition d'un service ---
-  server.on("/services/{}/edit", HTTP_GET, []() {
-    User* user = currentUser();
-    if (!user) return redirect("/login");
-    Service* s = findService(server.pathArg(0));
-    if (!s || s->sellerId != user->id) return redirect("/my-services");
-    server.send(200, "text/html", pageEditService(*user, *s));
-  });
-  server.on("/services/{}/edit", HTTP_POST, []() {
-    User* user = currentUser();
-    if (!user) return redirect("/login");
-    Service* s = findService(server.pathArg(0));
-    if (!s || s->sellerId != user->id) return redirect("/my-services");
-    s->title = server.arg("title").isEmpty() ? s->title : server.arg("title");
-    s->description = server.arg("description");
-    s->category = server.arg("category").isEmpty() ? s->category : server.arg("category");
-    s->price = server.arg("price").toInt();
-    s->icon = server.arg("icon").isEmpty() ? (s->icon.isEmpty() ? String("💗") : s->icon) : server.arg("icon");
-    saveStore();
-    redirect("/my-services");
-  });
-
-  // --- Suppression d'un service ---
-  server.on("/services/{}/delete", HTTP_POST, []() {
-    User* user = currentUser();
-    if (!user) return redirect("/login");
-    for (size_t i = 0; i < g_services.size(); i++) {
-      if (g_services[i].id == server.pathArg(0) && g_services[i].sellerId == user->id) {
-        g_services.erase(g_services.begin() + i);
-        break;
-      }
+    if (title.isEmpty()) {
+      flashError("Le titre est obligatoire.");
+      return redirect("/wishes/new");
+    }
+    Wish* w = createWish(user->id, title, server.arg("description"),
+                         sanitizeCategory(server.arg("category")),
+                         clampCredits(server.arg("credits")), server.arg("desiredDate"));
+    if (partner) {
+      addNotification(partner->id, "new_wish", w->id,
+                      user->displayName + " a publié une nouvelle envie : « " + w->title + " »");
     }
     saveStore();
-    redirect("/my-services");
+    flashSuccess("Ton envie a été publiée. Elle attend d'être découverte !");
+    redirect("/my-wishes");
   });
 
-  // --- Achat immédiat (débit de l'acheteur, demande au vendeur) ---
-  server.on("/services/{}/buy", HTTP_POST, []() {
+  // --- Modifier une envie (tant qu'elle est disponible) ---
+  server.on("/wishes/{}/edit", HTTP_GET, []() {
     User* user = currentUser();
     if (!user) return redirect("/login");
-    Service* s = findService(server.pathArg(0));
-    if (!s) return redirect("/shop");
-    User* partner = findUser(s->sellerId);
-    if (!partner) return redirect("/shop");
-    if (user->credits < s->price) return redirect("/shop");
-    user->credits -= s->price;
-    Offer* o = createOffer(user->id, partner->id, s->price, "purchase", "");
-    o->serviceId = s->id;
-    o->debitedAmount = s->price;
+    Wish* w = findWish(server.pathArg(0));
+    if (!w || w->userId != user->id || w->status != "open") return redirect("/my-wishes");
+    server.send(200, "text/html", pageWishForm(*user, w));
+  });
+  server.on("/wishes/{}/edit", HTTP_POST, []() {
+    User* user = currentUser();
+    if (!user) return redirect("/login");
+    Wish* w = findWish(server.pathArg(0));
+    if (!w || w->userId != user->id || w->status != "open") return redirect("/my-wishes");
+    String title = server.arg("title");
+    if (!title.isEmpty()) w->title = title;
+    w->description = server.arg("description");
+    w->category = sanitizeCategory(server.arg("category"));
+    if (!server.arg("credits").isEmpty()) w->credits = clampCredits(server.arg("credits"));
+    w->desiredDate = server.arg("desiredDate");
     saveStore();
-    redirect("/dashboard");
+    flashSuccess("Ton envie a été modifiée.");
+    redirect("/my-wishes");
   });
 
-  // --- Négociation sur un service ---
-  server.on("/services/{}/offer", HTTP_POST, []() {
+  // --- Supprimer une envie (uniquement si disponible) ---
+  server.on("/wishes/{}/delete", HTTP_POST, []() {
     User* user = currentUser();
     if (!user) return redirect("/login");
-    Service* s = findService(server.pathArg(0));
-    if (!s) return redirect("/shop");
-    Offer* o = createOffer(user->id, s->sellerId, server.arg("offeredPrice").toInt(),
-                           "negotiation", server.arg("comment"));
-    o->serviceId = s->id;
-    saveStore();
-    redirect("/dashboard");
+    Wish* w = findWish(server.pathArg(0));
+    if (w && w->userId == user->id && w->status == "open") {
+      for (size_t i = 0; i < g_wishes.size(); i++) {
+        if (g_wishes[i].id == w->id) { g_wishes.erase(g_wishes.begin() + i); break; }
+      }
+      saveStore();
+      flashSuccess("L'envie a été supprimée.");
+    }
+    redirect("/my-wishes");
   });
 
-  // --- Négociations (marque les offres comme lues, sans sauvegarde — comme l'original) ---
-  server.on("/negotiations", HTTP_GET, []() {
+  // --- Rubrique « Ses envies » (marque les notifications et les lectures) ---
+  server.on("/partner-wishes", HTTP_GET, []() {
     User* user = currentUser();
     if (!user) return redirect("/login");
-    for (auto& o : g_offers) {
-      if (o.fromUserId != user->id && o.toUserId != user->id) continue;
+    bool changed = false;
+    for (auto& w : g_wishes) {
+      if (w.status != "open" || w.userId == user->id) continue;
       bool already = false;
-      for (auto& r : o.readBy) if (r == user->id) { already = true; break; }
-      if (!already) o.readBy.push_back(user->id);
+      for (auto& r : w.readBy) if (r == user->id) { already = true; break; }
+      if (!already) { w.readBy.push_back(user->id); changed = true; }
     }
-    server.send(200, "text/html", pageNegotiations(*user));
+    if (changed) saveStore();
+    markRubriqueNotificationsRead(user->id, RUBRIQUE_PARTNER);
+    server.send(200, "text/html", pagePartnerWishes(*user));
   });
 
-  // --- Répondre à une offre : accept / counter / reject ---
-  server.on("/offers/{}/respond", HTTP_POST, []() {
+  // --- Accepter une envie (engagement volontaire, une seule personne) ---
+  server.on("/wishes/{}/accept", HTTP_POST, []() {
     User* user = currentUser();
     if (!user) return redirect("/login");
-    String action = server.arg("action");
-    String offerId = server.pathArg(0);
-    Offer* offer = findOffer(offerId);
-    if (!offer || offer->toUserId != user->id || offer->status != "pending") return redirect("/negotiations");
+    Wish* w = findWish(server.pathArg(0));
+    if (!w || w->status != "open" || w->userId == user->id) {
+      flashError("Cette envie n'est plus disponible.");
+      return redirect("/partner-wishes");
+    }
+    w->status = "accepted";
+    w->acceptedBy = user->id;
+    w->hasAcceptedAt = true;
+    w->acceptedAt = nowEpoch();
+    w->hasRealizationReportedAt = false;
+    w->realizationReportedAt = 0;
+    addNotification(w->userId, "wish_accepted", w->id,
+                    user->displayName + " se porte volontaire pour réaliser « " + w->title + " »");
+    saveStore();
+    flashSuccess("Tu as accepté cette envie — c'est un engagement libre, à ton rythme.");
+    redirect("/exchanges");
+  });
 
-    if (action == "accept") {
-      Service* service = offer->serviceId.isEmpty() ? nullptr : findService(offer->serviceId);
-      User* buyer = findUser(offer->fromUserId);
-      User* seller = findUser(offer->toUserId);
-      if (offer->type == "purchase") {
-        // Achat : crédits déjà débités, on crédite le vendeur
-        if (service && buyer && seller) {
-          seller->credits += offer->offeredPrice;
-          offer->status = "accepted";
-          offer->readBy.clear();
-          offer->readBy.push_back(user->id);
-        }
-      } else if (offer->type == "request") {
-        // Demande personnalisée : on débite le demandeur initial
-        User* originalRequester = findUser(offer->originalRequesterId.isEmpty() ? offer->fromUserId : offer->originalRequesterId);
-        if (originalRequester) {
-          User* serviceProvider = nullptr;
-          for (auto& u : g_users) if (u.id != originalRequester->id) { serviceProvider = &u; break; }
-          if (serviceProvider && originalRequester->credits >= offer->offeredPrice) {
-            originalRequester->credits -= offer->offeredPrice;
-            serviceProvider->credits += offer->offeredPrice;
-            if (offer->isSuperService && offer->superServiceBonus > 0) {
-              serviceProvider->credits += offer->superServiceBonus;
-            }
-            offer->status = "accepted";
-            offer->readBy.clear();
-            offer->readBy.push_back(user->id);
-          }
-        }
-      } else {
-        // Négociation classique
-        if (service && buyer && seller && buyer->credits >= offer->offeredPrice) {
-          buyer->credits -= offer->offeredPrice;
-          seller->credits += offer->offeredPrice;
-          if (offer->isSuperService && offer->superServiceBonus > 0) {
-            seller->credits += offer->superServiceBonus;
-          }
-          offer->status = "accepted";
-          offer->readBy.clear();
-          offer->readBy.push_back(user->id);
-        }
-      }
-    } else if (action == "counter") {
-      User* buyer = findUser(offer->fromUserId);
-      User* seller = findUser(offer->toUserId);
-      String counterPrice = server.arg("counterPrice");
-      String counterComment = server.arg("counterComment");
-      if (!counterPrice.isEmpty() && seller && buyer) {
-        String rootOfferId = offer->rootOfferId.isEmpty() ? offer->id : offer->rootOfferId;
-        Offer* n = createOffer(seller->id, buyer->id, counterPrice.toInt(),
-                               (offer->type == "request") ? "request" : "negotiation",
-                               counterComment.isEmpty() ? String("Contre-proposition") : counterComment);
-        n->serviceId = offer->serviceId;
-        n->serviceTitle = offer->serviceTitle;
-        n->serviceCategory = offer->serviceCategory;
-        n->serviceIcon = offer->serviceIcon;
-        n->parentOfferId = offer->id;
-        n->rootOfferId = rootOfferId;
-        n->originalRequesterId = offer->originalRequesterId.isEmpty() ? offer->fromUserId : offer->originalRequesterId;
-        // createOffer peut avoir réalloué le vecteur : on ré-acquiert le pointeur
-        offer = findOffer(offerId);
-        offer->status = "countered";
-        offer->readBy.clear();
-        offer->readBy.push_back(user->id);
-      }
-    } else {
-      // Refus : remboursement si achat
-      if (offer->type == "purchase" && offer->debitedAmount >= 0) {
-        User* buyer = findUser(offer->fromUserId);
-        if (buyer) buyer->credits += offer->debitedAmount;
-      }
-      offer->status = "rejected";
-      offer->readBy.clear();
-      offer->readBy.push_back(user->id);
+  // --- Rubrique « Nos échanges » (marque les notifications comme lues) ---
+  server.on("/exchanges", HTTP_GET, []() {
+    User* user = currentUser();
+    if (!user) return redirect("/login");
+    markRubriqueNotificationsRead(user->id, RUBRIQUE_EXCHANGES);
+    server.send(200, "text/html", pageExchanges(*user));
+  });
+
+  // --- Signaler la réalisation (par le réalisateur uniquement) ---
+  server.on("/wishes/{}/report-done", HTTP_POST, []() {
+    User* user = currentUser();
+    if (!user) return redirect("/login");
+    Wish* w = findWish(server.pathArg(0));
+    if (!w || w->status != "accepted" || w->acceptedBy != user->id || w->hasRealizationReportedAt) {
+      return redirect("/exchanges");
+    }
+    w->hasRealizationReportedAt = true;
+    w->realizationReportedAt = nowEpoch();
+    User* author = findUser(w->userId);
+    if (author) {
+      addNotification(author->id, "realization_reported", w->id,
+                      user->displayName + " a réalisé « " + w->title +
+                      " » — confirme que c'est fait pour lui offrir ses " + String(w->credits) + " ♥");
     }
     saveStore();
-    redirect("/negotiations");
+    flashSuccess("Réalisation signalée ! " + (author ? author->displayName : String("")) + " va confirmer.");
+    redirect("/exchanges");
   });
 
-  // --- Déclarer réalisé (par l'acheteur) ---
-  server.on("/offers/{}/realize", HTTP_POST, []() {
+  // --- Confirmer la réalisation (bénéficiaire uniquement, crédits attribués ICI) ---
+  server.on("/wishes/{}/confirm", HTTP_POST, []() {
     User* user = currentUser();
     if (!user) return redirect("/login");
-    Offer* offer = findOffer(server.pathArg(0));
-    if (!offer || offer->status != "accepted") return redirect("/negotiations");
-    String buyerId;
-    if (offer->type == "purchase") buyerId = offer->fromUserId;
-    else if (offer->type == "request") buyerId = offer->originalRequesterId.isEmpty() ? offer->fromUserId : offer->originalRequesterId;
-    else buyerId = offer->fromUserId;
-    if (user->id != buyerId) return redirect("/negotiations");
-    offer->status = "realized";
-    offer->readBy.clear();
-    offer->readBy.push_back(user->id);
-    String feedback = server.arg("feedback");
-    if (!feedback.isEmpty()) {
-      offer->feedback = feedback;
-      offer->hasFeedbackAt = true;
-      offer->feedbackAt = nowEpoch();
+    Wish* w = findWish(server.pathArg(0));
+    // Garde forte : statut accepted + appelant = bénéficiaire (auteur de l'envie)
+    if (!w || w->status != "accepted" || w->acceptedBy.isEmpty() || w->userId != user->id) {
+      flashError("Seul le bénéficiaire de l'envie peut confirmer sa réalisation.");
+      return redirect("/exchanges");
+    }
+    // Attribution des crédits : une seule fois, atomique avec le changement de statut
+    w->status = "completed";
+    w->hasCompletedAt = true;
+    w->completedAt = nowEpoch();
+    User* maker = findUser(w->acceptedBy);
+    if (w->credits > 0 && maker) {
+      maker->credits += w->credits;
+      addTransaction(maker->id, w->credits, "wish_completed", w->id,
+                     "Envie réalisée : " + w->title);
+    }
+    if (maker) {
+      addNotification(maker->id, "realization_confirmed", w->id,
+                      user->displayName + " a confirmé la réalisation de « " + w->title +
+                      " »" + (w->credits > 0 ? " — +" + String(w->credits) + " ♥ pour toi !" : " — merci !"));
     }
     saveStore();
-    redirect("/negotiations");
+    flashSuccess("Merci d'avoir confirmé ! Ce moment rejoint Nos moments.");
+    redirect("/moments");
   });
 
-  // --- Demander un service personnalisé ---
-  server.on("/request-service", HTTP_GET, []() {
+  // --- Abandon (par le réalisateur) : l'envie redevient disponible ---
+  server.on("/wishes/{}/abandon", HTTP_POST, []() {
     User* user = currentUser();
     if (!user) return redirect("/login");
-    server.send(200, "text/html", pageRequestService(*user));
-  });
-  server.on("/request-service", HTTP_POST, []() {
-    User* user = currentUser();
-    if (!user) return redirect("/login");
-    User* partner = findPartnerOf(user->id);
-    if (!partner) return redirect("/dashboard");
-    String title = server.arg("title");
-    int offeredPrice = server.arg("offeredPrice").toInt();
-    if (title.isEmpty() || offeredPrice == 0) return redirect("/request-service");
-    bool isSuper = (server.arg("isSuperService") == "true");
-    Offer* o = createOffer(user->id, partner->id, offeredPrice, "request", server.arg("description"));
-    o->serviceTitle = title;
-    o->serviceCategory = server.arg("category").isEmpty() ? String("Romantique") : server.arg("category");
-    o->serviceIcon = server.arg("icon").isEmpty() ? String("💗") : server.arg("icon");
-    o->originalRequesterId = user->id;
-    o->isSuperService = isSuper;
-    o->superServiceBonus = isSuper ? superServiceBonus(offeredPrice) : 0;
+    Wish* w = findWish(server.pathArg(0));
+    if (!w || w->status != "accepted" || w->acceptedBy != user->id) return redirect("/exchanges");
+    w->status = "open";
+    w->acceptedBy = "";
+    w->hasAcceptedAt = false;
+    w->acceptedAt = 0;
+    w->hasRealizationReportedAt = false;
+    w->realizationReportedAt = 0;
+    addNotification(w->userId, "wish_abandoned", w->id,
+                    user->displayName + " ne pourra pas réaliser « " + w->title +
+                    " ». L'envie est de nouveau disponible.");
     saveStore();
-    redirect("/negotiations");
+    flashSuccess("L'envie est de nouveau disponible. Aucun crédit n'a été attribué.");
+    redirect("/exchanges");
   });
 
-  // --- Proposer un service personnalisé ---
-  server.on("/offer-service", HTTP_GET, []() {
+  // --- Annulation (par le bénéficiaire/auteur) : aucun crédit ---
+  server.on("/wishes/{}/cancel", HTTP_POST, []() {
     User* user = currentUser();
     if (!user) return redirect("/login");
-    server.send(200, "text/html", pageOfferService(*user));
-  });
-  server.on("/offer-service", HTTP_POST, []() {
-    User* user = currentUser();
-    if (!user) return redirect("/login");
-    User* partner = findPartnerOf(user->id);
-    if (!partner) return redirect("/dashboard");
-    String title = server.arg("title");
-    int offeredPrice = server.arg("offeredPrice").toInt();
-    if (title.isEmpty() || offeredPrice == 0) return redirect("/offer-service");
-    bool isSuper = (server.arg("isSuperService") == "true");
-    // Le partenaire paiera s'il accepte : type request, payeur = partenaire
-    Offer* o = createOffer(user->id, partner->id, offeredPrice, "request", server.arg("description"));
-    o->serviceTitle = title;
-    o->serviceCategory = server.arg("category").isEmpty() ? String("Romantique") : server.arg("category");
-    o->serviceIcon = server.arg("icon").isEmpty() ? String("💗") : server.arg("icon");
-    o->originalRequesterId = partner->id;
-    o->isSuperService = isSuper;
-    o->superServiceBonus = isSuper ? superServiceBonus(offeredPrice) : 0;
-    saveStore();
-    redirect("/negotiations");
-  });
-
-  // --- Don de crédits ---
-  server.on("/donate-credits", HTTP_POST, []() {
-    User* user = currentUser();
-    if (!user) return redirect("/login");
-    User* partner = findPartnerOf(user->id);
-    if (!partner) return redirect("/dashboard");
-    int amountNum = server.arg("amount").toInt();
-    if (amountNum <= 0 || amountNum > user->credits) {
-      Session* s = sessionFind(getCookieToken());
-      if (s) s->flashError = "Montant invalide ou insuffisant";
-      return redirect("/dashboard");
+    Wish* w = findWish(server.pathArg(0));
+    if (!w || w->status != "accepted" || w->userId != user->id) return redirect("/exchanges");
+    w->status = "cancelled";
+    w->hasCancelledAt = true;
+    w->cancelledAt = nowEpoch();
+    if (!w->acceptedBy.isEmpty()) {
+      addNotification(w->acceptedBy, "wish_cancelled", w->id,
+                      user->displayName + " a annulé l'envie « " + w->title +
+                      " ». Aucun crédit n'est attribué, et c'est tout à fait ok.");
     }
-    user->credits -= amountNum;
-    partner->credits += amountNum;
-    Offer* d = createOffer(user->id, partner->id, amountNum, "donation",
-                           server.arg("message").isEmpty() ? String("Don de crédits") : server.arg("message"));
-    d->status = "accepted";
-    d->serviceTitle = "Don de crédits";
-    d->serviceCategory = "Cadeau";
-    d->serviceIcon = "💝";
-    d->originalRequesterId = user->id;
     saveStore();
-    Session* s = sessionFind(getCookieToken());
-    if (s) s->flashSuccess = "Don de " + String(amountNum) + " ❤️ crédits effectué à " + partner->displayName + " !";
-    redirect("/dashboard");
+    flashSuccess("L'envie a été annulée. Aucun crédit n'a été attribué.");
+    redirect("/my-wishes");
   });
 
-  // --- Utiliser un bon cadeau ---
-  server.on("/redeem-voucher", HTTP_POST, []() {
+  // --- Rubrique « Nos moments » (marque les notifications comme lues) ---
+  server.on("/moments", HTTP_GET, []() {
     User* user = currentUser();
     if (!user) return redirect("/login");
-    Voucher* v = findVoucherByCode(server.arg("code"));
-    if (!v || v->used) {
-      Session* s = sessionFind(getCookieToken());
-      if (s) s->flashError = "Code invalide ou déjà utilisé";
-      return redirect("/dashboard");
+    markRubriqueNotificationsRead(user->id, RUBRIQUE_MOMENTS);
+    server.send(200, "text/html", pageMoments(*user));
+  });
+
+  // --- Commentaire sur un moment réalisé (les deux partenaires) ---
+  server.on("/moments/{}/comment", HTTP_POST, []() {
+    User* user = currentUser();
+    if (!user) return redirect("/login");
+    Wish* w = findWish(server.pathArg(0));
+    if (w && w->status == "completed" && (w->userId == user->id || w->acceptedBy == user->id)) {
+      w->memoryComment = server.arg("comment");
+      w->memoryComment.trim();
+      saveStore();
+      flashSuccess("Commentaire enregistré.");
     }
-    user->credits += v->credits;
-    v->used = true;
-    v->usedBy = user->id;
-    v->hasUsedAt = true;
-    v->usedAt = nowEpoch();
-    saveStore();
-    Session* s = sessionFind(getCookieToken());
-    if (s) s->flashSuccess = "Félicitations ! Vous avez reçu " + String(v->credits) + " ❤️ crédits !";
-    redirect("/dashboard");
+    redirect("/moments");
   });
 
-  // --- Historique de couple ---
-  server.on("/relationship-history", HTTP_GET, []() {
-    User* user = currentUser();
-    if (!user) return redirect("/login");
-    server.send(200, "text/html", pageRelationshipHistory(*user));
-  });
-
-  // --- Événements spéciaux ---
-  server.on("/special-events", HTTP_GET, []() {
-    User* user = currentUser();
-    if (!user) return redirect("/login");
-    String err, ok;
-    takeFlash(err, ok);
-    server.send(200, "text/html", pageSpecialEvents(*user, err, ok));
-  });
-  server.on("/special-events/{}/accept", HTTP_POST, []() {
-    User* user = currentUser();
-    if (!user) return redirect("/login");
-    SpecialEvent* event = findEvent(server.pathArg(0));
-    if (!event || event->status != "active") return redirect("/special-events");
-    if (event->targetUser != "both" && event->targetUser != user->id) return redirect("/special-events");
-    Session* s = sessionFind(getCookieToken());
-    if (!event->assignedTo.isEmpty()) {
-      if (s) s->flashError = "Cet événement est déjà attribué à quelqu'un d'autre.";
-      return redirect("/special-events");
-    }
-    event->assignedTo = user->id;
-    Offer* o = createOffer(user->id, user->id, event->credits, "special_event",
-                           "Événement spécial: " + event->title);
-    o->status = "accepted";
-    o->serviceTitle = event->title;
-    o->serviceCategory = "Événement spécial";
-    o->serviceIcon = "🎯";
-    o->originalRequesterId = user->id;
-    o->eventId = event->id;
-    saveStore();
-    if (s) s->flashSuccess = "Vous avez accepté l'événement: " + event->title;
-    redirect("/special-events");
-  });
-  server.on("/special-events/{}/complete", HTTP_POST, []() {
-    User* user = currentUser();
-    if (!user) return redirect("/login");
-    String eventId = server.pathArg(0);
-    SpecialEvent* event = findEvent(eventId);
-    Offer* offer = nullptr;
-    for (auto& o : g_offers) if (o.eventId == eventId && o.fromUserId == user->id) { offer = &o; break; }
-    if (!event || event->status != "active" || !offer || event->assignedTo != user->id) return redirect("/special-events");
-    user->credits += event->credits;
-    event->completedBy = user->id;
-    event->hasCompletedAt = true;
-    event->completedAt = nowEpoch();
-    event->status = "completed";
-    offer->status = "realized";
-    saveStore();
-    Session* s = sessionFind(getCookieToken());
-    if (s) s->flashSuccess = "Félicitations ! Vous avez reçu " + String(event->credits) + " ❤️ crédits pour avoir complété l'événement: " + event->title;
-    redirect("/special-events");
-  });
-
-  // --- Administration ---
+  // --- Administration (invisible pour Alice, contrôlée côté serveur) ---
   server.on("/admin", HTTP_GET, []() {
     User* user = currentUser();
-    if (!user || user->role != "admin") {
-      server.send(403, "text/plain", "Forbidden");
-      return;
-    }
+    if (!isAdmin(user)) { server.send(403, "text/plain", "Forbidden"); return; }
     String importStatus = server.hasArg("import") ? server.arg("import") : String("");
     server.send(200, "text/html", pageAdmin(*user, importStatus));
   });
+
   server.on("/admin/credits", HTTP_POST, []() {
     User* user = currentUser();
-    if (!user || user->role != "admin") { server.send(403, "text/plain", "Forbidden"); return; }
+    if (!isAdmin(user)) { server.send(403, "text/plain", "Forbidden"); return; }
     User* target = findUser(server.arg("targetId"));
-    if (target) {
-      target->credits = server.arg("credits").toInt();
-      saveStore();
+    int amount = server.arg("amount").toInt();
+    String motif = server.arg("motif");
+    motif.trim();
+    if (!target || amount == 0 || motif.isEmpty()) {
+      flashError("Ajustement refusé : utilisateur, montant et motif sont obligatoires.");
+      return redirect("/admin");
     }
+    int newCredits = target->credits + amount;
+    if (newCredits < 0) {
+      flashError("Ajustement refusé : les crédits ne peuvent pas devenir négatifs.");
+      return redirect("/admin");
+    }
+    target->credits = newCredits;
+    addTransaction(target->id, amount, "admin_adjustment", "",
+                   "Ajustement par " + user->displayName + " : " + motif);
+    saveStore();
+    flashSuccess("Crédits de " + target->displayName + " ajustés (" + String(amount) + " ♥) et journalisés.");
     redirect("/admin");
   });
-  server.on("/admin/relationship-levels", HTTP_POST, []() {
+
+  server.on("/admin/levels", HTTP_POST, []() {
     User* user = currentUser();
-    if (!user || user->role != "admin") { server.send(403, "text/plain", "Forbidden"); return; }
+    if (!isAdmin(user)) { server.send(403, "text/plain", "Forbidden"); return; }
     int index = server.arg("levelIndex").toInt();
-    int credits = server.arg("minCredits").toInt();
-    if (index >= 0 && index < (int)g_levels.size() && credits >= 0) {
-      g_levels[index].minCredits = credits;
+    int threshold = server.arg("threshold").toInt();
+    if (index >= 0 && index < (int)g_levels.size() && threshold >= 0) {
+      g_levels[index].threshold = threshold;
       saveStore();
     }
     redirect("/admin");
   });
-  server.on("/admin/special-event", HTTP_POST, []() {
+
+  server.on("/admin/categories", HTTP_POST, []() {
     User* user = currentUser();
-    if (!user || user->role != "admin") { server.send(403, "text/plain", "Forbidden"); return; }
-    String title = server.arg("title");
-    String description = server.arg("description");
-    int creditsNum = server.arg("credits").toInt();
-    if (title.isEmpty() || description.isEmpty() || creditsNum <= 0) return redirect("/admin");
-    SpecialEvent e;
-    e.id = String(g_nextEventId++);
-    e.title = title;
-    e.description = description;
-    e.credits = creditsNum;
-    e.targetUser = server.arg("targetUser").isEmpty() ? String("both") : server.arg("targetUser");
-    e.status = "active";
-    e.hasCreatedAt = true;
-    e.createdAt = nowEpoch();
-    g_events.push_back(e);
-    saveStore();
+    if (!isAdmin(user)) { server.send(403, "text/plain", "Forbidden"); return; }
+    String action = server.arg("action");
+    if (action == "add") {
+      String name = server.arg("name");
+      name.trim();
+      if (!name.isEmpty() && !isKnownCategory(name)) {
+        Category c;
+        c.name = name;
+        c.icon = server.arg("icon").isEmpty() ? String("✨") : server.arg("icon");
+        g_categories.push_back(c);
+        saveStore();
+      }
+    } else if (action == "delete") {
+      int index = server.arg("index").toInt();
+      if (index >= 0 && index < (int)g_categories.size() && g_categories.size() > 1) {
+        g_categories.erase(g_categories.begin() + index);
+        saveStore();
+      }
+    }
     redirect("/admin");
   });
-  server.on("/admin/gift-voucher", HTTP_POST, []() {
-    User* user = currentUser();
-    if (!user || user->role != "admin") { server.send(403, "text/plain", "Forbidden"); return; }
-    int creditsNum = server.arg("credits").toInt();
-    if (creditsNum <= 0) return redirect("/admin");
-    // Code à 4 chiffres unique (spécification bons cadeaux)
-    String code;
-    do {
-      code = String(1000 + (int)random(9000));
-    } while (findVoucherByCode(code) != nullptr);
-    Voucher v;
-    v.id = String(g_nextVoucherId++);
-    v.code = code;
-    v.credits = creditsNum;
-    v.comment = server.arg("comment");
-    v.used = false;
-    v.hasCreatedAt = true;
-    v.createdAt = nowEpoch();
-    g_vouchers.push_back(v);
-    saveStore();
-    redirect("/admin");
-  });
+
   server.on("/admin/export", HTTP_GET, []() {
     User* user = currentUser();
-    if (!user || user->role != "admin") { server.send(403, "text/plain", "Forbidden"); return; }
+    if (!isAdmin(user)) { server.send(403, "text/plain", "Forbidden"); return; }
     server.sendHeader("Content-Disposition", "attachment; filename=data.json");
     server.send(200, "application/json", exportStoreJSON());
   });
+
+  server.on("/admin/legacy", HTTP_GET, []() {
+    User* user = currentUser();
+    if (!isAdmin(user)) { server.send(403, "text/plain", "Forbidden"); return; }
+    String legacy = exportLegacyJSON();
+    if (legacy.isEmpty()) { server.send(404, "text/plain", "No legacy archive"); return; }
+    server.sendHeader("Content-Disposition", "attachment; filename=legacy.json");
+    server.send(200, "application/json", legacy);
+  });
+
   server.on("/admin/import", HTTP_POST, []() {
     User* user = currentUser();
-    if (!user || user->role != "admin") { server.send(403, "text/plain", "Forbidden"); return; }
+    if (!isAdmin(user)) { server.send(403, "text/plain", "Forbidden"); return; }
     String data = server.arg("data");
     if (data.isEmpty()) data = server.arg("plain");
     bool ok = !data.isEmpty() && importStoreJSON(data);
     redirect(ok ? "/admin?import=ok" : "/admin?import=failed");
   });
 
-  // --- Bon cadeau imprimable (route publique, comme l'original) ---
-  server.on("/gift-voucher/{}", HTTP_GET, []() {
-    Voucher* v = findVoucherByCode(server.pathArg(0));
-    if (!v || v->used) {
-      server.send(404, "text/plain", "Voucher not found or already used");
-      return;
+  server.on("/admin/reset", HTTP_POST, []() {
+    User* user = currentUser();
+    if (!isAdmin(user)) { server.send(403, "text/plain", "Forbidden"); return; }
+    String scope = server.arg("scope");
+    String confirm = server.arg("confirm");
+    if (confirm != "yes") {
+      flashError("Réinitialisation annulée : confirmation explicite requise.");
+      return redirect("/admin");
     }
-    server.send(200, "text/html", pageGiftVoucher(*v));
+    if (scope == "notifications") {
+      g_notifications.clear();
+      g_nextNotificationId = 1;
+      flashSuccess("Notifications réinitialisées.");
+    } else if (scope == "wishes") {
+      for (size_t i = g_wishes.size(); i > 0; i--) {
+        if (g_wishes[i - 1].status == "open") g_wishes.erase(g_wishes.begin() + (i - 1));
+      }
+      flashSuccess("Envies disponibles supprimées — l'historique est conservé.");
+    } else if (scope == "all") {
+      g_wishes.clear();
+      g_transactions.clear();
+      g_notifications.clear();
+      g_nextWishId = 1;
+      g_nextTransactionId = 1;
+      g_nextNotificationId = 1;
+      flashSuccess("Données d'activité réinitialisées (utilisateurs et configuration conservés).");
+    } else {
+      flashError("Portée de réinitialisation inconnue.");
+      return redirect("/admin");
+    }
+    saveStore();
+    redirect("/admin");
   });
 
   // --- 404 ---
