@@ -1,0 +1,11 @@
+# Love Market — table de partitions ESP32-S3 pour flash 16 Mo
+# Le scheme officiel "app3M_fat9M_16MB" fournit du FAT, incompatible avec LittleFS.
+# NB : le core 3.x cherche la partition par LABEL "spiffs" (LittleFS.h) — le nom
+# "spiffs" est donc requis, avec le sous-type littlefs.
+# Name,   Type, SubType, Offset,  Size, Flags
+nvs,      data, nvs,     0x9000,  0x5000,
+otadata,  data, ota,     0xe000,  0x2000,
+app0,     app,  ota_0,   0x10000, 0x300000,
+app1,     app,  ota_1,   0x310000,0x300000,
+spiffs,   data, littlefs,0x610000,0x9E0000,
+coredump, data, coredump,0xFF0000,0x10000,
